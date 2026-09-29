@@ -129,19 +129,18 @@ variables:
 
 ### 1. 🌐 Web Dashboard Hiện Đại & Bảo Mật (Trên trình duyệt)
 Giao diện Web siêu nhẹ (chạy bằng Python 3 có sẵn, không cần cài đặt thêm bất kỳ thư viện nào):
+* 📑 **Bố cục Phân Trang (5 Tabs) Chuyên biệt & Tiện Lợi:**
+  * 📊 **Tổng quan & Kết nối:** Theo dõi trạng thái Anycast, Egress IP, PoP Colo, thẻ trạng thái nhanh và lệnh cURL test.
+  * ⚡ **Đo kiểm Tốc độ:** Kiểm tra tốc độ & độ trễ đến 8 trạm Data Center lớn (Singapore, Nhật Bản, Đức, Mỹ, Anh, Phần Lan) hoặc chạy Benchmark toàn bộ có thanh đo trực quan.
+  * 🔀 **Điều hướng Proxy:** Tùy chỉnh bật/tắt Proxy cho Docker Daemon, GitHub CLI, GitLab CLI và đổi cổng SOCKS5 linh hoạt.
+  * 🦊 **GitLab CI/CD:** Hướng dẫn và tạo sẵn cấu hình tăng tốc pipeline `.gitlab-ci.yml` và Runner `config.toml` (kèm nút Copy nhanh).
+  * 📋 **Nhật ký & Chẩn đoán:** Xem log dịch vụ `warp-svc` theo thời gian thực với chế độ tự động làm mới.
 * 🔐 **Bảo mật & Chống Hack toàn diện:**
   * Trang đăng nhập Dark Mode Glassmorphism bảo vệ tất cả endpoint UI và REST API.
   * Mã hóa mật khẩu chuẩn công nghiệp **SHA-256 + 16-byte Random Salt**.
   * **Chống Brute-Force Rate Limiting:** Tự động khóa IP 5 phút nếu nhập sai quá 5 lần liên tiếp.
   * Quản lý phiên bằng Session Cookie bảo mật (`HttpOnly`, `SameSite=Lax`, tự hủy khi hết hạn).
-  * Tiêu đề bảo mật HTTP (`X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`).
-* **Bật / Tắt WARP** với 1 cú click chuột.
-* **Bật / Tắt Proxy cho Docker** (tự động cấu hình `NO_PROXY` cho Docker Hub để không bị bóp băng thông).
-* **Bật / Tắt Proxy cho GitHub CLI** (`github.com`) & **GitLab CLI** (`gitlab.com`).
-* **Đổi cổng SOCKS5 Proxy** trực quan.
-* **Đo tốc độ mạng Đa Quốc Gia (Multi-Region Speed Test):** Đo kiểm tốc độ và độ trễ tới 8 Data Center quốc tế (🇸🇬 Singapore, 🇯🇵 Nhật Bản, 🇩🇪 Đức, 🇺🇸 Mỹ Bờ Đông/Tây, 🇬🇧 Anh Quốc, 🇫🇮 Phần Lan) hoặc chạy Benchmark toàn bộ cùng lúc.
-* **Đổi mật khẩu trực tiếp:** Hỗ trợ đổi mật khẩu ngay trên giao diện Web (`🔑 Đổi mật khẩu`).
-* **Xem nhật ký dịch vụ (Real-time Logs)**.
+  * Hỗ trợ đổi mật khẩu trực tiếp trên Web UI (`🔑 Đổi mật khẩu`).
 
 ```bash
 # Khởi chạy Web Dashboard trực tiếp:

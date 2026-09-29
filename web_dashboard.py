@@ -582,13 +582,136 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 
     .card:hover { border-color: rgba(255, 255, 255, 0.15); }
 
-    .col-7 { grid-column: span 7; }
+    .col-4 { grid-column: span 4; }
     .col-5 { grid-column: span 5; }
     .col-6 { grid-column: span 6; }
+    .col-7 { grid-column: span 7; }
+    .col-8 { grid-column: span 8; }
     .col-12 { grid-column: span 12; }
 
-    @media (max-width: 820px) {
-      .col-7, .col-5, .col-6 { grid-column: span 12; }
+    @media (max-width: 860px) {
+      .col-7, .col-5, .col-6, .col-4, .col-8 { grid-column: span 12; }
+    }
+
+    /* Tabs Navigation Bar */
+    .tabs-bar {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 22px;
+      background: rgba(15, 23, 42, 0.75);
+      backdrop-filter: blur(16px);
+      padding: 6px;
+      border-radius: 14px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      overflow-x: auto;
+    }
+    .tab-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 18px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-muted);
+      background: transparent;
+      border: 1px solid transparent;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      white-space: nowrap;
+      user-select: none;
+    }
+    .tab-btn:hover {
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.05);
+    }
+    .tab-btn.active {
+      color: #ffffff;
+      background: linear-gradient(135deg, rgba(249, 115, 22, 0.95) 0%, rgba(234, 88, 12, 0.95) 100%);
+      box-shadow: 0 4px 16px var(--primary-glow);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+    .tab-pane {
+      display: none;
+      animation: tabFadeIn 0.25s ease-out;
+    }
+    .tab-pane.active {
+      display: block;
+    }
+    @keyframes tabFadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Metric & Shortcut Cards */
+    .metric-card {
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 16px;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      transition: all 0.2s;
+    }
+    .metric-card:hover {
+      background: rgba(255, 255, 255, 0.04);
+      border-color: rgba(255, 255, 255, 0.12);
+      transform: translateY(-2px);
+    }
+    .metric-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    .metric-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .badge-status {
+      font-size: 11px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 12px;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .badge-status.active {
+      background: rgba(16, 185, 129, 0.15);
+      color: #6ee7b7;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+    .badge-status.inactive {
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--text-muted);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    .quick-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 10px;
+    }
+    .chip-btn {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: var(--text);
+      font-size: 11px;
+      font-weight: 600;
+      padding: 5px 10px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .chip-btn:hover {
+      background: rgba(255, 255, 255, 0.12);
+      border-color: var(--primary);
     }
 
     .status-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
@@ -762,197 +885,362 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     </div>
   </header>
 
-  <div class="dashboard-grid">
-    
-    <!-- Status Card -->
-    <div class="card col-7">
-      <div class="status-header">
-        <div class="status-indicator">
-          <div id="statusDot" class="status-pulse"></div>
-          <div>
-            <div id="statusText" class="status-title">Đang tải trạng thái...</div>
-            <div id="statusSub" class="status-subtitle">Kiểm tra kết nối dịch vụ Cloudflare Anycast</div>
+  <!-- Navigation Tabs Bar -->
+  <nav class="tabs-bar">
+    <button class="tab-btn active" onclick="switchTab('overview')" id="tabBtn-overview">
+      <span>📊</span> <span>Tổng quan & Kết nối</span>
+    </button>
+    <button class="tab-btn" onclick="switchTab('speedtest')" id="tabBtn-speedtest">
+      <span>⚡</span> <span>Đo kiểm Tốc độ</span>
+    </button>
+    <button class="tab-btn" onclick="switchTab('routing')" id="tabBtn-routing">
+      <span>🔀</span> <span>Điều hướng Proxy</span>
+    </button>
+    <button class="tab-btn" onclick="switchTab('gitlab')" id="tabBtn-gitlab">
+      <span>🦊</span> <span>GitLab CI/CD</span>
+    </button>
+    <button class="tab-btn" onclick="switchTab('logs')" id="tabBtn-logs">
+      <span>📋</span> <span>Nhật ký & Chẩn đoán</span>
+    </button>
+  </nav>
+
+  <!-- TAB 1: TỔNG QUAN & KẾT NỐI -->
+  <div class="tab-pane active" id="tab-overview">
+    <div class="dashboard-grid">
+      <!-- Hero Status Card (col-12) -->
+      <div class="card col-12">
+        <div class="status-header">
+          <div class="status-indicator">
+            <div id="statusDot" class="status-pulse"></div>
+            <div>
+              <div id="statusText" class="status-title">Đang tải trạng thái...</div>
+              <div id="statusSub" class="status-subtitle">Kiểm tra kết nối dịch vụ Cloudflare Anycast</div>
+            </div>
+          </div>
+          <button id="toggleBtn" onclick="toggleWarp()" class="btn btn-primary">
+            <span id="btnIcon">⚡</span> <span id="btnText">Ngắt kết nối</span>
+          </button>
+        </div>
+
+        <div class="stats-row" style="grid-template-columns: repeat(4, 1fr);">
+          <div class="stat-box">
+            <div class="stat-label">Trạm Anycast PoP</div>
+            <div id="coloValue" class="stat-value">--</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">Cổng SOCKS5 Local</div>
+            <div id="portValue" class="stat-value">127.0.0.1:40000</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">Egress IP Public</div>
+            <div id="ipValue" class="stat-value" style="font-size: 13px;">--</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">Chế độ Proxy</div>
+            <div class="stat-value" style="color: var(--success); font-size: 13px;">SOCKS5 (Safe for SSH)</div>
           </div>
         </div>
-        <button id="toggleBtn" onclick="toggleWarp()" class="btn btn-primary">
-          <span id="btnIcon">⚡</span> <span id="btnText">Ngắt kết nối</span>
+      </div>
+
+      <!-- Quick Action Cards (3 x col-4) -->
+      <div class="card col-4 metric-card">
+        <div>
+          <div class="metric-header">
+            <span class="metric-title">🐳 Docker Proxy</span>
+            <span id="ovDockerBadge" class="badge-status inactive">○ Đang kiểm tra...</span>
+          </div>
+          <p style="font-size: 12px; color: var(--text-muted); margin: 0 0 14px 0; line-height: 1.5;">
+            Tự động kéo các container registry quốc tế qua WARP, giữ nguyên tốc độ kéo trực tiếp Docker Hub (~200 Mbps).
+          </p>
+        </div>
+        <button onclick="switchTab('routing')" class="btn btn-secondary btn-sm" style="width: 100%;">
+          Cấu hình Docker ➔
         </button>
       </div>
 
-      <div class="stats-row">
-        <div class="stat-box">
-          <div class="stat-label">Trạm Anycast PoP</div>
-          <div id="coloValue" class="stat-value">--</div>
-        </div>
-        <div class="stat-box">
-          <div class="stat-label">Cổng SOCKS5 Local</div>
-          <div id="portValue" class="stat-value">127.0.0.1:40000</div>
-        </div>
-        <div class="stat-box">
-          <div class="stat-label">Egress IP Public</div>
-          <div id="ipValue" class="stat-value" style="font-size: 13px;">--</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Multi-region Speed Test Card -->
-    <div class="card col-5">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-        <h3 style="font-size: 15px; font-weight: 700;">Kiểm Tra Tốc Độ Đa Quốc Gia</h3>
-      </div>
-      
-      <div style="margin-bottom: 12px;">
-        <select id="regionSelect" class="select-style">
-          <option value="SG_SIN">🇸🇬 Singapore (Hetzner DC)</option>
-          <option value="JP_TYO">🇯🇵 Nhật Bản (Tokyo, Linode)</option>
-          <option value="DE_FSN" selected>🇩🇪 Đức (Falkenstein, Hetzner)</option>
-          <option value="DE_NBG">🇩🇪 Đức (Nuremberg, Hetzner)</option>
-          <option value="US_ASH">🇺🇸 Mỹ - Bờ Đông (Ashburn, Hetzner)</option>
-          <option value="US_HIL">🇺🇸 Mỹ - Bờ Tây (Hillsboro, Hetzner)</option>
-          <option value="UK_LON">🇬🇧 Anh Quốc (London, Linode)</option>
-          <option value="FI_HEL">🇫🇮 Phần Lan (Helsinki, Hetzner)</option>
-          <option value="ALL">🚀 Đo TOÀN BỘ các Data Center (Benchmark All)</option>
-        </select>
-      </div>
-
-      <div style="display: flex; gap: 8px; margin-bottom: 14px;">
-        <button onclick="runSpeedTest()" id="testSpeedBtn" class="btn btn-secondary btn-sm" style="flex: 1;">▶ Bắt đầu đo</button>
-      </div>
-
-      <div id="singleResultBox">
-        <div class="speed-gauge">
-          <div id="speedResult" class="speed-number">--</div>
-          <div id="speedUnit" style="font-size: 12px; color: var(--text-muted);">MB/s</div>
-        </div>
-        <div id="speedDetail" style="font-size: 11px; text-align: center; color: var(--text-muted);">
-          Chọn Data Center và nhấn "Bắt đầu đo"
-        </div>
-      </div>
-
-      <!-- Multi Results Table -->
-      <div id="allResultsBox" style="display: none; max-height: 180px; overflow-y: auto;">
-        <table class="benchmark-table">
-          <thead>
-            <tr>
-              <th>Data Center</th>
-              <th>Tốc độ</th>
-              <th>Độ trễ</th>
-            </tr>
-          </thead>
-          <tbody id="allResultsTbody"></tbody>
-        </table>
-      </div>
-    </div>
-
-    <!-- Smart Routing Toggles -->
-    <div class="card col-12">
-      <h3 style="font-size: 16px; font-weight: 700; margin-bottom: 16px;">Cấu hình Điều hướng Thông minh (Smart Routing)</h3>
-
-      <div class="control-item">
-        <div class="control-info">
-          <h4>Proxy cho Docker Daemon (Kèm NO_PROXY Docker Hub)</h4>
-          <p>Tự động cấu hình daemon để kéo các registry quốc tế qua WARP, giữ nguyên tốc độ kéo trực tiếp Docker Hub (~200 Mbps).</p>
-        </div>
-        <label class="switch">
-          <input type="checkbox" id="dockerSwitch" onchange="toggleDockerProxy()">
-          <span class="slider"></span>
-        </label>
-      </div>
-
-      <div class="control-item">
-        <div class="control-info">
-          <h4>Tăng tốc Git CLI cho GitHub (https://github.com/)</h4>
-          <p>Chỉ định tuyến riêng git clone/push của GitHub đi qua WARP SOCKS5, không ảnh hưởng Git nội bộ.</p>
-        </div>
-        <label class="switch">
-          <input type="checkbox" id="gitSwitch" onchange="toggleGitProxy()">
-          <span class="slider"></span>
-        </label>
-      </div>
-
-      <div class="control-item">
-        <div class="control-info">
-          <h4>Tăng tốc Git CLI cho GitLab (https://gitlab.com/)</h4>
-          <p>Chỉ định tuyến riêng git clone/fetch của GitLab quốc tế qua WARP SOCKS5.</p>
-        </div>
-        <label class="switch">
-          <input type="checkbox" id="gitlabSwitch" onchange="toggleGitLabProxy()">
-          <span class="slider"></span>
-        </label>
-      </div>
-
-      <div class="control-item">
-        <div class="control-info">
-          <h4>Đổi Cổng SOCKS5 Proxy</h4>
-          <p>Mặc định là 40000. Bạn có thể đổi sang cổng khác nếu bị xung đột.</p>
-        </div>
-        <div style="display: flex; gap: 8px;">
-          <input type="number" id="customPortInput" style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.15); color: white; padding: 6px 10px; border-radius: 8px; width: 100px; font-family: monospace;" value="40000">
-          <button onclick="saveCustomPort()" class="btn btn-secondary btn-sm">Lưu</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- GitLab CI/CD Acceleration Card -->
-    <div class="card col-12">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-        <h3 style="font-size: 16px; font-weight: 700;">🦊 Tăng Tốc GitLab CI/CD Pipeline & Runner</h3>
-        <span style="font-size: 12px; color: var(--accent); font-weight: 600;">SOCKS5: 127.0.0.1:40000</span>
-      </div>
-      <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 14px;">
-        Tăng tốc độ kéo mã nguồn từ gitlab.com, kéo container image từ registry.gitlab.com và tải các package (NPM, PyPI, Go) trong pipeline.
-      </p>
-
-      <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px;">
+      <div class="card col-4 metric-card">
         <div>
-          <div style="font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">1. Cho file .gitlab-ci.yml (Toàn bộ Pipeline):</div>
-          <div class="code-snippet" style="flex-direction: column; align-items: flex-start; gap: 8px;">
-            <code style="white-space: pre;">variables:
+          <div class="metric-header">
+            <span class="metric-title">🐙 Git & GitLab CLI</span>
+            <span id="ovGitBadge" class="badge-status inactive">○ Đang kiểm tra...</span>
+          </div>
+          <p style="font-size: 12px; color: var(--text-muted); margin: 0 0 14px 0; line-height: 1.5;">
+            Chỉ định tuyến riêng git clone/push của GitHub & GitLab đi qua WARP SOCKS5, không ảnh hưởng Git nội bộ.
+          </p>
+        </div>
+        <button onclick="switchTab('routing')" class="btn btn-secondary btn-sm" style="width: 100%;">
+          Cấu hình Git ➔
+        </button>
+      </div>
+
+      <div class="card col-4 metric-card">
+        <div>
+          <div class="metric-header">
+            <span class="metric-title">⚡ Đo Tốc Độ Mạng</span>
+            <span class="badge-status active">8 Trạm Toàn Cầu</span>
+          </div>
+          <p style="font-size: 12px; color: var(--text-muted); margin: 0 0 14px 0; line-height: 1.5;">
+            Kiểm tra băng thông và độ trễ đến Singapore, Nhật Bản, Đức, Mỹ, Anh, Phần Lan hoặc Benchmark toàn bộ.
+          </p>
+        </div>
+        <button onclick="switchTab('speedtest')" class="btn btn-primary btn-sm" style="width: 100%;">
+          Kiểm tra tốc độ ➔
+        </button>
+      </div>
+
+      <!-- Quick Commands Card (col-12) -->
+      <div class="card col-12">
+        <h3 style="font-size: 15px; font-weight: 700; margin-bottom: 12px;">📌 Lệnh Dòng Lệnh Nhanh (Terminal CheatSheet)</h3>
+        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px;">
+          <div>
+            <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 6px;">Kiểm tra đường truyền cURL qua SOCKS5:</div>
+            <div class="code-snippet">
+              <code id="quickCurlCmd">curl --socks5-hostname 127.0.0.1:40000 https://cloudflare.com/cdn-cgi/trace</code>
+              <button onclick="copyToClipboard(document.getElementById('quickCurlCmd').innerText)" class="btn btn-secondary btn-sm">Copy</button>
+            </div>
+          </div>
+          <div>
+            <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 6px;">Bật proxy tạm thời cho phiên Terminal / CI-CD:</div>
+            <div class="code-snippet">
+              <code id="quickExportCmd">export all_proxy="socks5://127.0.0.1:40000"</code>
+              <button onclick="copyToClipboard(document.getElementById('quickExportCmd').innerText)" class="btn btn-secondary btn-sm">Copy</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB 2: ĐO KIỂM TỐC ĐỘ -->
+  <div class="tab-pane" id="tab-speedtest">
+    <div class="dashboard-grid">
+      <div class="card col-12">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 18px; flex-wrap: wrap; gap: 12px;">
+          <div>
+            <h3 style="font-size: 17px; font-weight: 700; margin: 0 0 6px 0;">⚡ Đo Kiểm Tốc Độ Mạng Đa Quốc Gia Qua WARP SOCKS5</h3>
+            <p style="font-size: 13px; color: var(--text-muted); margin: 0;">
+              Đo kiểm tốc độ tải thực tế và độ trễ từ máy chủ của bạn đến các trạm Cloud Data Center lớn trên thế giới.
+            </p>
+          </div>
+          <div class="badge-mode" style="background: rgba(249, 115, 22, 0.12); border-color: rgba(249, 115, 22, 0.3); color: var(--accent);">
+            <span>8 Trạm Anycast Quốc Tế</span>
+          </div>
+        </div>
+
+        <div style="background: rgba(0, 0, 0, 0.25); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 14px; padding: 18px; margin-bottom: 20px;">
+          <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+            <div style="flex: 1; min-width: 260px;">
+              <label style="font-size: 12px; color: var(--text-muted); display: block; margin-bottom: 6px;">Chọn Data Center muốn đo kiểm:</label>
+              <select id="regionSelect" class="select-style" style="font-size: 13px; padding: 10px 14px;">
+                <option value="SG_SIN">🇸🇬 Singapore (Hetzner DC)</option>
+                <option value="JP_TYO">🇯🇵 Nhật Bản (Tokyo, Linode)</option>
+                <option value="DE_FSN" selected>🇩🇪 Đức (Falkenstein, Hetzner)</option>
+                <option value="DE_NBG">🇩🇪 Đức (Nuremberg, Hetzner)</option>
+                <option value="US_ASH">🇺🇸 Mỹ - Bờ Đông (Ashburn, Hetzner)</option>
+                <option value="US_HIL">🇺🇸 Mỹ - Bờ Tây (Hillsboro, Hetzner)</option>
+                <option value="UK_LON">🇬🇧 Anh Quốc (London, Linode)</option>
+                <option value="FI_HEL">🇫🇮 Phần Lan (Helsinki, Hetzner)</option>
+                <option value="ALL">🚀 Đo TOÀN BỘ các Data Center (Benchmark All)</option>
+              </select>
+            </div>
+            <div style="align-self: flex-end;">
+              <button onclick="runSpeedTest()" id="testSpeedBtn" class="btn btn-primary" style="padding: 10px 24px; font-size: 14px;">
+                ▶ Bắt đầu kiểm tra tốc độ
+              </button>
+            </div>
+          </div>
+
+          <div class="quick-chips">
+            <span style="font-size: 12px; color: var(--text-muted); align-self: center; margin-right: 4px;">Chọn nhanh:</span>
+            <button type="button" onclick="selectAndRunSpeed('SG_SIN')" class="chip-btn">🇸🇬 Singapore</button>
+            <button type="button" onclick="selectAndRunSpeed('JP_TYO')" class="chip-btn">🇯🇵 Nhật Bản</button>
+            <button type="button" onclick="selectAndRunSpeed('DE_FSN')" class="chip-btn">🇩🇪 Đức (FSN)</button>
+            <button type="button" onclick="selectAndRunSpeed('US_ASH')" class="chip-btn">🇺🇸 Mỹ (Ashburn)</button>
+            <button type="button" onclick="selectAndRunSpeed('ALL')" class="chip-btn" style="background: rgba(249, 115, 22, 0.15); border-color: rgba(249, 115, 22, 0.4); color: #fdba74;">🚀 Benchmark All</button>
+          </div>
+        </div>
+
+        <!-- Single Result Box -->
+        <div id="singleResultBox" style="background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 14px; padding: 24px; text-align: center;">
+          <div class="speed-gauge">
+            <div id="speedResult" class="speed-number" style="font-size: 48px;">--</div>
+            <div id="speedUnit" style="font-size: 14px; color: var(--text-muted); font-weight: 600; text-transform: uppercase;">MB/s</div>
+          </div>
+          <div id="speedDetail" style="font-size: 13px; color: var(--text-muted); margin-top: 6px;">
+            Chọn trạm kiểm tra và bấm "Bắt đầu kiểm tra tốc độ"
+          </div>
+        </div>
+
+        <!-- All Results Table Box -->
+        <div id="allResultsBox" style="display: none; background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 14px; padding: 20px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+            <h4 style="font-size: 15px; font-weight: 700; margin: 0;">Bảng Tổng Hợp Benchmark 8 Data Center Quốc Tế</h4>
+            <span style="font-size: 12px; color: var(--text-muted);">Đường truyền: Cloudflare WARP SOCKS5</span>
+          </div>
+          <div style="overflow-x: auto;">
+            <table class="benchmark-table">
+              <thead>
+                <tr>
+                  <th>Data Center</th>
+                  <th>Tốc độ tải</th>
+                  <th>Độ trễ (Ping)</th>
+                  <th>Trạng thái</th>
+                </tr>
+              </thead>
+              <tbody id="allResultsTbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB 3: ĐIỀU HƯỚNG PROXY -->
+  <div class="tab-pane" id="tab-routing">
+    <div class="dashboard-grid">
+      <!-- Smart Routing Card (col-12) -->
+      <div class="card col-12">
+        <h3 style="font-size: 17px; font-weight: 700; margin-bottom: 6px;">🔀 Cấu hình Điều hướng Thông minh (Smart Routing)</h3>
+        <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 18px;">
+          Chỉ định tuyến riêng các ứng dụng và dịch vụ chỉ định đi qua WARP SOCKS5 mà không làm ảnh hưởng hay làm chậm lưu lượng nội bộ của máy chủ.
+        </p>
+
+        <div class="control-item">
+          <div class="control-info">
+            <h4>Proxy cho Docker Daemon (Kèm NO_PROXY Docker Hub)</h4>
+            <p>Tự động cấu hình daemon để kéo các registry quốc tế (ghcr.io, quay.io, gcr.io) qua WARP, giữ nguyên tốc độ kéo trực tiếp Docker Hub (~200 Mbps).</p>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="dockerSwitch" onchange="toggleDockerProxy()">
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div class="control-item">
+          <div class="control-info">
+            <h4>Tăng tốc Git CLI cho GitHub (https://github.com/)</h4>
+            <p>Chỉ định tuyến riêng git clone/push/fetch của GitHub đi qua WARP SOCKS5, không ảnh hưởng Git nội bộ.</p>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="gitSwitch" onchange="toggleGitProxy()">
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div class="control-item">
+          <div class="control-info">
+            <h4>Tăng tốc Git CLI cho GitLab (https://gitlab.com/)</h4>
+            <p>Chỉ định tuyến riêng git clone/fetch của GitLab quốc tế qua WARP SOCKS5.</p>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="gitlabSwitch" onchange="toggleGitLabProxy()">
+            <span class="slider"></span>
+          </label>
+        </div>
+      </div>
+
+      <!-- SOCKS5 Port Changer (col-6) -->
+      <div class="card col-6">
+        <h3 style="font-size: 15px; font-weight: 700; margin-bottom: 8px;">⚙️ Đổi Cổng SOCKS5 Proxy</h3>
+        <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 14px;">
+          Mặc định là <strong>40000</strong>. Bạn có thể đổi sang bất kỳ cổng nào từ 1024 đến 65535 nếu máy chủ bị xung đột cổng.
+        </p>
+        <div style="display: flex; gap: 10px; align-items: center;">
+          <input type="number" id="customPortInput" class="input-style" style="width: 140px; font-family: 'JetBrains Mono', monospace;" value="40000" min="1024" max="65535">
+          <button onclick="saveCustomPort()" class="btn btn-primary btn-sm">Lưu cổng mới</button>
+        </div>
+      </div>
+
+      <!-- Privoxy Forwarder Info (col-6) -->
+      <div class="card col-6">
+        <h3 style="font-size: 15px; font-weight: 700; margin-bottom: 8px;">🌐 Hỗ trợ Ứng dụng Chỉ Nhận HTTP Proxy</h3>
+        <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 10px;">
+          Nếu ứng dụng của bạn chỉ hỗ trợ HTTP/HTTPS proxy mà không hỗ trợ SOCKS5, bạn có thể kết hợp với <strong>Privoxy</strong> để chuyển đổi:
+        </p>
+        <div class="code-snippet">
+          <code style="font-size: 11px;">forward-socks5 .github.com 127.0.0.1:40000 .</code>
+          <button onclick="copyToClipboard('forward-socks5 .github.com 127.0.0.1:40000 .\nforward-socks5 .gitlab.com 127.0.0.1:40000 .')" class="btn btn-secondary btn-sm">Copy</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB 4: GITLAB CI/CD -->
+  <div class="tab-pane" id="tab-gitlab">
+    <div class="dashboard-grid">
+      <div class="card col-12">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px; flex-wrap: wrap; gap: 10px;">
+          <div>
+            <h3 style="font-size: 17px; font-weight: 700; margin: 0 0 6px 0;">🦊 Tăng Tốc GitLab CI/CD Pipeline & GitLab Runner</h3>
+            <p style="font-size: 13px; color: var(--text-muted); margin: 0;">
+              Khắc phục triệt để tình trạng kéo code từ gitlab.com bị treo, kéo container images hoặc tải dependencies (NPM, PyPI, Go) trong pipeline bị chậm.
+            </p>
+          </div>
+          <span style="font-size: 12px; color: var(--accent); font-weight: 600; background: rgba(249, 115, 22, 0.1); padding: 6px 12px; border-radius: 8px; border: 1px solid rgba(249, 115, 22, 0.2);">
+            Proxy Endpoint: 127.0.0.1:40000
+          </span>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; margin-top: 16px;">
+          <div style="background: rgba(0, 0, 0, 0.25); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 14px; padding: 18px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+              <h4 style="font-size: 14px; font-weight: 700; color: #fff; margin: 0;">1. Cấu hình cho .gitlab-ci.yml</h4>
+              <button onclick="copyToClipboard('variables:\n  ALL_PROXY: \x22socks5://127.0.0.1:40000\x22\n  NO_PROXY: \x22localhost,127.0.0.1,docker.io,*.docker.com\x22')" class="btn btn-secondary btn-sm">Copy YAML</button>
+            </div>
+            <p style="font-size: 12px; color: var(--text-muted); margin: 0 0 10px 0;">Thêm khối variables vào đầu file để áp dụng cho mọi stage/job:</p>
+            <div class="code-snippet" style="flex-direction: column; align-items: stretch; gap: 8px; margin: 0;">
+              <code style="white-space: pre; font-size: 12px; line-height: 1.6;">variables:
   ALL_PROXY: "socks5://127.0.0.1:40000"
+  HTTP_PROXY: "socks5://127.0.0.1:40000"
+  HTTPS_PROXY: "socks5://127.0.0.1:40000"
   NO_PROXY: "localhost,127.0.0.1,docker.io,*.docker.com"</code>
-            <button onclick="copyToClipboard('variables:\n  ALL_PROXY: \x22socks5://127.0.0.1:40000\x22\n  NO_PROXY: \x22localhost,127.0.0.1,docker.io,*.docker.com\x22')" class="btn btn-secondary btn-sm" style="align-self: flex-end;">Copy YAML</button>
+            </div>
+          </div>
+
+          <div style="background: rgba(0, 0, 0, 0.25); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 14px; padding: 18px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+              <h4 style="font-size: 14px; font-weight: 700; color: #fff; margin: 0;">2. Cấu hình cho config.toml của Runner</h4>
+              <button onclick="copyToClipboard('[runners.docker]\n  network_mode = \x22host\x22\nenvironment = [\n  \x22ALL_PROXY=socks5://127.0.0.1:40000\x22\n]')" class="btn btn-secondary btn-sm">Copy TOML</button>
+            </div>
+            <p style="font-size: 12px; color: var(--text-muted); margin: 0 0 10px 0;">Trong <code>/etc/gitlab-runner/config.toml</code> (Bắt buộc dùng network_mode = "host"):</p>
+            <div class="code-snippet" style="flex-direction: column; align-items: stretch; gap: 8px; margin: 0;">
+              <code style="white-space: pre; font-size: 12px; line-height: 1.6;">[[runners]]
+  environment = ["ALL_PROXY=socks5://127.0.0.1:40000"]
+  [runners.docker]
+    network_mode = "host"</code>
+            </div>
           </div>
         </div>
 
-        <div>
-          <div style="font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">2. Cho Runner (/etc/gitlab-runner/config.toml):</div>
-          <div class="code-snippet" style="flex-direction: column; align-items: flex-start; gap: 8px;">
-            <code style="white-space: pre;">[runners.docker]
-  network_mode = "host"
-environment = [
-  "ALL_PROXY=socks5://127.0.0.1:40000"
-]</code>
-            <button onclick="copyToClipboard('[runners.docker]\n  network_mode = \x22host\x22\nenvironment = [\n  \x22ALL_PROXY=socks5://127.0.0.1:40000\x22\n]')" class="btn btn-secondary btn-sm" style="align-self: flex-end;">Copy TOML</button>
+        <div style="background: rgba(249, 115, 22, 0.06); border: 1px solid rgba(249, 115, 22, 0.2); border-radius: 12px; padding: 14px 18px; margin-top: 18px;">
+          <div style="font-size: 13px; font-weight: 600; color: #fdba74; margin-bottom: 4px;">💡 File Mẫu Đầy Đủ Có Sẵn Trong Thư Mục Cài Đặt:</div>
+          <div style="font-size: 12px; color: var(--text-muted);">
+            Bạn có thể tham khảo trực tiếp 2 file mẫu: <strong><code>gitlab-ci.example.yml</code></strong> (tích hợp sẵn cache, Node, Python, Docker) và <strong><code>gitlab-runner.example.toml</code></strong>.
           </div>
         </div>
       </div>
     </div>
+  </div>
 
-    <!-- Quick Commands -->
-    <div class="card col-6">
-      <h3 style="font-size: 15px; font-weight: 700; margin-bottom: 10px;">Lệnh Dòng Lệnh Nhanh (On-Demand)</h3>
-      <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 10px;">Bật proxy tạm thời cho toàn bộ phiên làm việc của terminal:</p>
-      
-      <div class="code-snippet">
-        <code>export all_proxy="socks5://127.0.0.1:40000"</code>
-        <button onclick="copyToClipboard('export all_proxy=\x22socks5://127.0.0.1:40000\x22')" class="btn btn-secondary btn-sm">Copy</button>
-      </div>
-
-      <div class="code-snippet">
-        <code>curl --socks5-hostname 127.0.0.1:40000 https://example.com</code>
-        <button onclick="copyToClipboard('curl --socks5-hostname 127.0.0.1:40000 https://example.com')" class="btn btn-secondary btn-sm">Copy</button>
+  <!-- TAB 5: NHẬT KÝ & CHẨN ĐOÁN -->
+  <div class="tab-pane" id="tab-logs">
+    <div class="dashboard-grid">
+      <div class="card col-12">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 10px;">
+          <div>
+            <h3 style="font-size: 17px; font-weight: 700; margin: 0 0 4px 0;">📋 Nhật Ký Dịch Vụ Hệ Thống (warp-svc)</h3>
+            <p style="font-size: 13px; color: var(--text-muted); margin: 0;">Xem nhật ký hoạt động thời gian thực của daemon Cloudflare WARP trên máy chủ.</p>
+          </div>
+          <div style="display: flex; gap: 10px; align-items: center;">
+            <label style="font-size: 12px; color: var(--text-muted); display: flex; align-items: center; gap: 6px; cursor: pointer;">
+              <input type="checkbox" id="autoLogsCheck" onchange="toggleAutoLogs()"> Tự động làm mới (5s)
+            </label>
+            <button onclick="loadLogs()" class="btn btn-secondary btn-sm">🔄 Làm mới ngay</button>
+          </div>
+        </div>
+        <div id="logsBox" class="terminal-box" style="max-height: 420px; font-size: 12px; line-height: 1.6;">Đang tải nhật ký hệ thống...</div>
       </div>
     </div>
-
-    <!-- Logs Box -->
-    <div class="card col-6">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-        <h3 style="font-size: 15px; font-weight: 700;">Nhật Ký Dịch Vụ (warp-svc)</h3>
-        <button onclick="loadLogs()" class="btn btn-secondary btn-sm">Làm mới</button>
-      </div>
-      <div id="logsBox" class="terminal-box">Đang tải nhật ký hệ thống...</div>
-    </div>
-
   </div>
 </div>
 
@@ -960,6 +1248,44 @@ environment = [
 
 <script>
   let currentStatus = {};
+  let autoLogTimer = null;
+
+  function switchTab(tabId) {
+    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+    document.querySelectorAll('.tab-pane').forEach(pane => pane.classList.remove('active'));
+
+    const btn = document.getElementById('tabBtn-' + tabId);
+    const pane = document.getElementById('tab-' + tabId);
+
+    if (btn) btn.classList.add('active');
+    if (pane) pane.classList.add('active');
+
+    if (window.history && window.history.replaceState) {
+      window.history.replaceState(null, null, '#' + tabId);
+    }
+
+    if (tabId === 'logs') {
+      loadLogs();
+    }
+  }
+
+  function selectAndRunSpeed(region) {
+    document.getElementById('regionSelect').value = region;
+    runSpeedTest();
+  }
+
+  function toggleAutoLogs() {
+    const chk = document.getElementById('autoLogsCheck');
+    if (chk && chk.checked) {
+      loadLogs();
+      if (!autoLogTimer) autoLogTimer = setInterval(loadLogs, 5000);
+    } else {
+      if (autoLogTimer) {
+        clearInterval(autoLogTimer);
+        autoLogTimer = null;
+      }
+    }
+  }
 
   async function fetchStatus() {
     try {
@@ -1005,6 +1331,25 @@ environment = [
     document.getElementById('dockerSwitch').checked = data.docker_proxy;
     document.getElementById('gitSwitch').checked = data.git_proxy;
     document.getElementById('gitlabSwitch').checked = data.gitlab_proxy;
+
+    // Cập nhật badges trên Overview
+    const ovDocker = document.getElementById('ovDockerBadge');
+    if (ovDocker) {
+      ovDocker.className = data.docker_proxy ? 'badge-status active' : 'badge-status inactive';
+      ovDocker.innerText = data.docker_proxy ? '● Đang Bật' : '○ Đang Tắt';
+    }
+    const ovGit = document.getElementById('ovGitBadge');
+    if (ovGit) {
+      const isAnyGit = data.git_proxy || data.gitlab_proxy;
+      ovGit.className = isAnyGit ? 'badge-status active' : 'badge-status inactive';
+      ovGit.innerText = isAnyGit ? '● Đang Bật' : '○ Đang Tắt';
+    }
+
+    // Cập nhật lệnh cURL & Export trên Overview
+    const curlEl = document.getElementById('quickCurlCmd');
+    if (curlEl) curlEl.innerText = `curl --socks5-hostname 127.0.0.1:${data.port} https://cloudflare.com/cdn-cgi/trace`;
+    const expEl = document.getElementById('quickExportCmd');
+    if (expEl) expEl.innerText = `export all_proxy="socks5://127.0.0.1:${data.port}"`;
   }
 
   async function toggleWarp() {
@@ -1100,7 +1445,7 @@ environment = [
       singleBox.style.display = 'none';
       allBox.style.display = 'block';
       const tbody = document.getElementById('allResultsTbody');
-      tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:#9ca3af; padding:15px;">Đang song song đo kiểm 8 trạm toàn cầu...</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#9ca3af; padding:20px;">Đang song song đo kiểm 8 trạm Anycast toàn cầu...</td></tr>';
 
       try {
         const res = await fetch('/api/test-speed', {
@@ -1112,19 +1457,26 @@ environment = [
         tbody.innerHTML = '';
         data.results.forEach(r => {
           const row = document.createElement('tr');
+          const pct = Math.min(100, Math.max(8, Math.round((r.speed_mb_s / 50) * 100)));
           row.innerHTML = `
-            <td><strong>${r.flag}</strong> ${r.name}</td>
-            <td style="font-family:'JetBrains Mono'; color:#00d2ff; font-weight:700;">${r.speed_mb_s} MB/s</td>
-            <td style="font-family:'JetBrains Mono'; color:#9ca3af;">${r.latency_ms} ms</td>
+            <td style="padding: 10px 12px;"><strong>${r.flag}</strong> ${r.name}</td>
+            <td style="font-family:'JetBrains Mono'; color:#00d2ff; font-weight:700; padding: 10px 12px;">
+              ${r.speed_mb_s} MB/s
+              <div style="background:rgba(255,255,255,0.06); height:4px; border-radius:2px; margin-top:4px; width:130px;">
+                <div style="background:linear-gradient(90deg, #00d2ff, #3a7bd5); height:100%; border-radius:2px; width:${pct}%;"></div>
+              </div>
+            </td>
+            <td style="font-family:'JetBrains Mono'; color:#9ca3af; padding: 10px 12px;">${r.latency_ms} ms</td>
+            <td style="padding: 10px 12px;"><span class="badge-status active">✓ Hoàn tất</span></td>
           `;
           tbody.appendChild(row);
         });
         showToast('Đã đo xong toàn bộ các Data Center!');
       } catch (e) {
-        tbody.innerHTML = `<tr><td colspan="3" style="color:#ef4444;">Lỗi: ${e}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="4" style="color:#ef4444; padding:15px;">Lỗi: ${e}</td></tr>`;
       } finally {
         btn.disabled = false;
-        btn.innerText = '▶ Bắt đầu đo';
+        btn.innerText = '▶ Bắt đầu kiểm tra tốc độ';
       }
     } else {
       allBox.style.display = 'none';
@@ -1146,7 +1498,7 @@ environment = [
         detailBox.innerText = 'Không thể đo kiểm: ' + e;
       } finally {
         btn.disabled = false;
-        btn.innerText = '▶ Bắt đầu đo';
+        btn.innerText = '▶ Bắt đầu kiểm tra tốc độ';
       }
     }
   }
@@ -1265,6 +1617,17 @@ environment = [
   fetchStatus();
   loadLogs();
   setInterval(fetchStatus, 10000);
+
+  // Khôi phục tab từ URL hash nếu có
+  function initTabFromHash() {
+    const hash = window.location.hash.replace('#', '');
+    if (['overview', 'speedtest', 'routing', 'gitlab', 'logs'].includes(hash)) {
+      switchTab(hash);
+    }
+  }
+  window.addEventListener('DOMContentLoaded', initTabFromHash);
+  window.addEventListener('hashchange', initTabFromHash);
+  initTabFromHash();
 </script>
 
 <!-- Modal Đổi Mật Khẩu -->
