@@ -215,4 +215,6 @@ Nếu muốn một cổng HTTP proxy duy nhất (ví dụ `127.0.0.1:8118`) tự
 | **Kiểm tra IP & trạm PoP** | `curl --socks5-hostname 127.0.0.1:40000 https://cloudflare.com/cdn-cgi/trace` |
 | **Khởi động lại Service** | `sudo systemctl restart warp-svc` |
 | **Xem log dịch vụ WARP** | `sudo journalctl -u warp-svc -n 50 -f` |
-| **Gỡ cài đặt hoàn toàn** | `sudo apt remove --purge -y cloudflare-warp` |
+| **Mở Terminal UI (Menu)** | `sudo bash menu.sh` |
+| **Đổi mật khẩu Web UI** | `sudo bash install.sh --set-password <new_pass>` |
+| **Gỡ cài đặt hoàn toàn** | `sudo bash install.sh --uninstall` |

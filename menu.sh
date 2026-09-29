@@ -305,7 +305,7 @@ start_web_dashboard() {
     echo -e "${BLUE}==>${NC} ${BOLD}Khởi động Web Dashboard trên cổng 8888...${NC}"
 
     # Kiểm tra xem web_dashboard đang chạy chưa
-    if pgrep -f "web_dashboard.py" >/dev/null; then
+    if systemctl is-active --quiet warp-dashboard.service 2>/dev/null || pgrep -f "web_dashboard.py" >/dev/null; then
         echo -e "${GREEN}Web Dashboard đang hoạt động sẵn tại:${NC}"
     else
         nohup python3 "${script_dir}/web_dashboard.py" >/dev/null 2>&1 &
@@ -317,6 +317,36 @@ start_web_dashboard() {
     ip_public=$(curl -m 3 -s ifconfig.me || hostname -I | awk '{print $1}')
     echo -e "  Truy cập trình duyệt tại: ${CYAN}http://${ip_public}:8888${NC}"
     echo -e "  Hoặc truy cập nội bộ    : ${CYAN}http://127.0.0.1:8888${NC}"
+    echo -e "  Tài khoản đăng nhập     : ${YELLOW}admin${NC}"
+    echo -e "  Mật khẩu mặc định       : ${YELLOW}datahub@2026${NC}"
+    echo -e "  ${MAGENTA}*(Có thể đổi mật khẩu tại mục [11] hoặc nút '🔑 Đổi mật khẩu' trên Web)*${NC}"
+}
+
+change_dashboard_password() {
+    local script_dir
+    script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+    echo -e "${CYAN}╔══════════════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${CYAN}║${NC}   ${BOLD}${YELLOW}ĐỔI MẬT KHẨU ĐĂNG NHẬP WEB DASHBOARD${NC}                               ${CYAN}║${NC}"
+    echo -e "${CYAN}╚══════════════════════════════════════════════════════════════════════╝${NC}"
+    echo ""
+    read -s -rp "Nhập mật khẩu mới (tối thiểu 6 ký tự): " new_pass
+    echo ""
+    if [ ${#new_pass} -lt 6 ]; then
+        echo -e "${RED}[LỖI] Mật khẩu quá ngắn! Phải có ít nhất 6 ký tự.${NC}"
+        return
+    fi
+    read -s -rp "Xác nhận lại mật khẩu mới: " confirm_pass
+    echo ""
+    if [ "$new_pass" != "$confirm_pass" ]; then
+        echo -e "${RED}[LỖI] Mật khẩu xác nhận không khớp!${NC}"
+        return
+    fi
+
+    python3 "${script_dir}/web_dashboard.py" --set-password "$new_pass"
+    if systemctl is-active --quiet warp-dashboard.service 2>/dev/null; then
+        systemctl restart warp-dashboard.service
+    fi
+    echo -e "${GREEN}Đã cập nhật mật khẩu Web Dashboard thành công!${NC}"
 }
 
 # Vòng lặp Menu chính
@@ -331,10 +361,11 @@ while true; do
     echo -e "  ${BOLD}[7]${NC} 🦊 ${BOLD}Xem cấu hình tăng tốc GitLab CI/CD & Runner${NC}"
     echo -e "  ${BOLD}[8]${NC} ⚡ ${BOLD}Đo kiểm tốc độ mạng quốc tế${NC} (Speed Test)"
     echo -e "  ${BOLD}[9]${NC} 🌐 ${CYAN}Mở Web Dashboard trên trình duyệt${NC} (Port 8888)"
-    echo -e "  ${BOLD}[10]${NC} 📋 Xem log dịch vụ (warp-svc logs)"
+    echo -e "  ${BOLD}[10]${NC} 🔐 ${YELLOW}Đổi mật khẩu Web Dashboard${NC}"
+    echo -e "  ${BOLD}[11]${NC} 📋 Xem log dịch vụ (warp-svc logs)"
     echo -e "  ${BOLD}[0]${NC} Thoát"
     echo -e "${CYAN}──────────────────────────────────────────────────────────────────────${NC}"
-    read -rp "Chọn thao tác [0-10]: " choice
+    read -rp "Chọn thao tác [0-11]: " choice
 
     case "$choice" in
         1)
@@ -379,6 +410,10 @@ while true; do
             pause
             ;;
         10)
+            change_dashboard_password
+            pause
+            ;;
+        11)
             journalctl -u warp-svc -n 30 --no-pager
             pause
             ;;

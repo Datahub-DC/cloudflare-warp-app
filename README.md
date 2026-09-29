@@ -127,13 +127,20 @@ variables:
 
 Để người dùng không cần phải ghi nhớ các câu lệnh phức tạp, công cụ hỗ trợ **2 loại giao diện trực quan**:
 
-### 1. 🌐 Web Dashboard Hiện Đại (Trên trình duyệt)
+### 1. 🌐 Web Dashboard Hiện Đại & Bảo Mật (Trên trình duyệt)
 Giao diện Web siêu nhẹ (chạy bằng Python 3 có sẵn, không cần cài đặt thêm bất kỳ thư viện nào):
+* 🔐 **Bảo mật & Chống Hack toàn diện:**
+  * Trang đăng nhập Dark Mode Glassmorphism bảo vệ tất cả endpoint UI và REST API.
+  * Mã hóa mật khẩu chuẩn công nghiệp **SHA-256 + 16-byte Random Salt**.
+  * **Chống Brute-Force Rate Limiting:** Tự động khóa IP 5 phút nếu nhập sai quá 5 lần liên tiếp.
+  * Quản lý phiên bằng Session Cookie bảo mật (`HttpOnly`, `SameSite=Lax`, tự hủy khi hết hạn).
+  * Tiêu đề bảo mật HTTP (`X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`).
 * **Bật / Tắt WARP** với 1 cú click chuột.
 * **Bật / Tắt Proxy cho Docker** (tự động cấu hình `NO_PROXY` cho Docker Hub để không bị bóp băng thông).
-* **Bật / Tắt Proxy cho GitHub CLI** (`github.com`).
+* **Bật / Tắt Proxy cho GitHub CLI** (`github.com`) & **GitLab CLI** (`gitlab.com`).
 * **Đổi cổng SOCKS5 Proxy** trực quan.
 * **Đo tốc độ mạng Đa Quốc Gia (Multi-Region Speed Test):** Đo kiểm tốc độ và độ trễ tới 8 Data Center quốc tế (🇸🇬 Singapore, 🇯🇵 Nhật Bản, 🇩🇪 Đức, 🇺🇸 Mỹ Bờ Đông/Tây, 🇬🇧 Anh Quốc, 🇫🇮 Phần Lan) hoặc chạy Benchmark toàn bộ cùng lúc.
+* **Đổi mật khẩu trực tiếp:** Hỗ trợ đổi mật khẩu ngay trên giao diện Web (`🔑 Đổi mật khẩu`).
 * **Xem nhật ký dịch vụ (Real-time Logs)**.
 
 ```bash
@@ -142,10 +149,17 @@ sudo python3 web_dashboard.py
 # Hoặc chạy qua script:
 sudo bash install.sh --dashboard
 
-# Hoặc cài đặt thành dịch vụ hệ thống (tự chạy khi boot):
+# Cài đặt thành dịch vụ hệ thống (tự chạy ngầm cùng hệ thống khi khởi động lại):
 sudo bash install.sh --dashboard-service
 ```
 *Truy cập trình duyệt tại:* **`http://<IP_MAY_CHU>:8888`**
+* **Tài khoản đăng nhập mặc định:**
+  * Tên đăng nhập: `admin`
+  * Mật khẩu: `datahub@2026`
+* **Đổi mật khẩu đăng nhập bằng dòng lệnh:**
+  ```bash
+  sudo bash install.sh --set-password "MatKhauMoiCuaBan@2026"
+  ```
 
 ---
 
@@ -167,16 +181,19 @@ sudo bash install.sh --menu
   Trạng thái  : ● ĐANG KẾT NỐI (Connected)
   Chế độ      : SOCKS5 Proxy (An toàn tuyệt đối cho SSH)
   Cổng Proxy  : 127.0.0.1:40000
-  Tích hợp    : Docker [Bật (kèm NO_PROXY)] | Git [Bật (github.com)]
+  Tích hợp    : Docker [Bật (kèm NO_PROXY)] | Git [Bật] | GitLab [Bật]
 ──────────────────────────────────────────────────────────────────────
   [1] Bật kết nối WARP (Connect)
   [2] Tạm ngắt kết nối WARP (Disconnect)
   [3] Đổi cổng SOCKS5 Proxy (Change Port)
   [4] Bật / Tắt Proxy cho Docker Daemon (kèm NO_PROXY)
-  [5] Bật / Tắt Proxy cho GitHub CLI
-  [6] ⚡ Đo kiểm tốc độ mạng quốc tế (Speed Test)
-  [7] 🌐 Mở Web Dashboard trên trình duyệt (Port 8888)
-  [8] 📋 Xem log dịch vụ (warp-svc logs)
+  [5] Bật / Tắt Proxy cho GitHub CLI (github.com)
+  [6] Bật / Tắt Proxy cho GitLab CLI (gitlab.com)
+  [7] 🦊 Xem cấu hình tăng tốc GitLab CI/CD & Runner
+  [8] ⚡ Đo kiểm tốc độ mạng quốc tế (Speed Test)
+  [9] 🌐 Mở Web Dashboard trên trình duyệt (Port 8888)
+  [10] 🔐 Đổi mật khẩu Web Dashboard
+  [11] 📋 Xem log dịch vụ (warp-svc logs)
   [0] Thoát
 ```
 

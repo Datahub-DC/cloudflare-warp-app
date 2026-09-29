@@ -1,0 +1,13 @@
+# Authentication & Secrets
+.warp_auth.json
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.log
+
+# System & Temp
+.DS_Store
+*.swp
+*.swo

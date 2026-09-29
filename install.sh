@@ -205,7 +205,8 @@ verify_connection() {
         echo ""
         echo -e "  4. ${BOLD}Mở Bảng Điều Khiển Giao Diện Trực Quan (UI):${NC}"
         echo -e "     - ${GREEN}Terminal Interactive UI (TUI):${NC} ${CYAN}sudo bash menu.sh${NC}"
-        echo -e "     - ${GREEN}Web Dashboard (Trình duyệt):${NC}    ${CYAN}sudo python3 web_dashboard.py${NC} (hoặc chạy ${CYAN}sudo bash install.sh --dashboard-service${NC})"
+        echo -e "     - ${GREEN}Web Dashboard (Trình duyệt):${NC}    ${CYAN}http://<IP_SERVER>:8888${NC} (hoặc chạy ${CYAN}sudo bash install.sh --dashboard-service${NC})"
+        echo -e "       ${YELLOW}Tài khoản đăng nhập:${NC} admin | ${YELLOW}Mật khẩu:${NC} datahub@2026"
         echo ""
         echo -e "  5. ${BOLD}Xem tài liệu chi tiết (Docker NO_PROXY, Privoxy):${NC}"
         echo -e "     Đọc tài liệu: ${CYAN}CF_Warp_guideline.md${NC}"
@@ -231,7 +232,10 @@ setup_dashboard_service() {
     echo -e "${GREEN}Dịch vụ warp-dashboard đã được kích hoạt và tự động khởi động cùng hệ thống!${NC}"
     local ip_public
     ip_public=$(curl -m 3 -s ifconfig.me || hostname -I | awk '{print $1}')
-    echo -e "  Truy cập giao diện tại: ${CYAN}http://${ip_public}:8888${NC}"
+    echo -e "  Truy cập giao diện tại : ${CYAN}http://${ip_public}:8888${NC}"
+    echo -e "  Tài khoản đăng nhập     : ${YELLOW}admin${NC}"
+    echo -e "  Mật khẩu mặc định       : ${YELLOW}datahub@2026${NC}"
+    echo -e "  Đổi mật khẩu nhanh      : ${CYAN}sudo bash $0 --set-password <mat_khau_moi>${NC}"
     exit 0
 }
 
@@ -275,6 +279,7 @@ show_help() {
     echo "  --menu                 : Mở giao diện tương tác dòng lệnh (Terminal UI)"
     echo "  --dashboard            : Chạy Web Dashboard trên cổng 8888"
     echo "  --dashboard-service    : Cài đặt Web Dashboard làm systemd service (tự bật khi khởi động)"
+    echo "  --set-password <pass>  : Đổi mật khẩu đăng nhập Web Dashboard"
     echo "  --status               : Kiểm tra trạng thái kết nối WARP hiện tại"
     echo "  --uninstall            : Gỡ cài đặt Cloudflare WARP sạch sẽ"
     echo "  --help, -h             : Hiển thị hướng dẫn này"
@@ -298,6 +303,19 @@ main() {
         --dashboard-service)
             check_root
             setup_dashboard_service
+            ;;
+        --set-password)
+            check_root
+            if [ -z "$2" ]; then
+                echo -e "${RED}[LỖI] Thiếu mật khẩu mới! Cú pháp: sudo bash $0 --set-password <mat_khau_moi>${NC}"
+                exit 1
+            fi
+            python3 "${script_dir}/web_dashboard.py" --set-password "$2"
+            if systemctl is-active --quiet warp-dashboard.service 2>/dev/null; then
+                systemctl restart warp-dashboard.service
+            fi
+            echo -e "${GREEN}Đã cập nhật mật khẩu Web Dashboard thành công!${NC}"
+            exit 0
             ;;
         --uninstall)
             check_root

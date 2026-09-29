@@ -1,15 +1,23 @@
 #!/usr/bin/env python3
 """
 Cloudflare WARP Web Dashboard & Management API
-Multi-region Speed Test support (Germany, Singapore, Japan, USA, UK, Finland).
+Features:
+- Secure Authentication with SHA-256 + Salt
+- Anti-Brute-Force Rate Limiting
+- Session Management with HttpOnly Cookies
+- Multi-Region Speed Test (Germany, Singapore, Japan, USA, UK, Finland)
+- Smart Routing Controls (Docker NO_PROXY, Git, GitLab CI/CD)
 Zero external dependencies - Uses Python 3 standard library.
 """
 
 import concurrent.futures
+import hashlib
+import http.cookies
 import http.server
 import json
 import os
 import re
+import secrets
 import socketserver
 import subprocess
 import sys
@@ -18,6 +26,12 @@ import urllib.parse
 
 PORT = int(os.environ.get("WARP_DASHBOARD_PORT", "8888"))
 HOST = os.environ.get("WARP_DASHBOARD_HOST", "0.0.0.0")
+AUTH_FILE = os.environ.get("WARP_AUTH_FILE", "/root/linux-cloudflare-warp/.warp_auth.json")
+
+# In-memory session store: token -> {"username": str, "expires": float}
+SESSIONS = {}
+# Rate limiting: ip -> [timestamp1, timestamp2, ...]
+FAILED_ATTEMPTS = {}
 
 DATA_CENTERS = {
     "SG_SIN": {
@@ -70,8 +84,100 @@ DATA_CENTERS = {
     }
 }
 
+# ==============================================================================
+# BẢO MẬT & XÁC THỰC
+# ==============================================================================
+
+def hash_password(password, salt=None):
+    if not salt:
+        salt = secrets.token_hex(16)
+    hashed = hashlib.sha256((salt + password).encode("utf-8")).hexdigest()
+    return hashed, salt
+
+def init_auth():
+    if os.path.exists(AUTH_FILE):
+        try:
+            with open(AUTH_FILE, "r") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    # Mật khẩu mặc định khởi tạo
+    default_user = os.environ.get("WARP_DASHBOARD_USER", "admin")
+    default_pass = os.environ.get("WARP_DASHBOARD_PASS", "datahub@2026")
+    h, salt = hash_password(default_pass)
+    auth_data = {
+        "username": default_user,
+        "password_hash": h,
+        "salt": salt
+    }
+    os.makedirs(os.path.dirname(AUTH_FILE) if os.path.dirname(AUTH_FILE) else ".", exist_ok=True)
+    with open(AUTH_FILE, "w") as f:
+        json.dump(auth_data, f)
+    os.chmod(AUTH_FILE, 0o600)
+    return auth_data
+
+def set_password(new_password, username="admin"):
+    h, salt = hash_password(new_password)
+    auth_data = {
+        "username": username,
+        "password_hash": h,
+        "salt": salt
+    }
+    os.makedirs(os.path.dirname(AUTH_FILE) if os.path.dirname(AUTH_FILE) else ".", exist_ok=True)
+    with open(AUTH_FILE, "w") as f:
+        json.dump(auth_data, f)
+    os.chmod(AUTH_FILE, 0o600)
+    SESSIONS.clear()
+    return True
+
+def verify_credentials(user, password):
+    auth_data = init_auth()
+    if user != auth_data.get("username"):
+        return False
+    h, _ = hash_password(password, auth_data.get("salt"))
+    return h == auth_data.get("password_hash")
+
+def check_rate_limit(client_ip):
+    now = time.time()
+    attempts = [t for t in FAILED_ATTEMPTS.get(client_ip, []) if now - t < 300]
+    FAILED_ATTEMPTS[client_ip] = attempts
+    return len(attempts) >= 5
+
+def record_failed_attempt(client_ip):
+    now = time.time()
+    if client_ip not in FAILED_ATTEMPTS:
+        FAILED_ATTEMPTS[client_ip] = []
+    FAILED_ATTEMPTS[client_ip].append(now)
+
+def clear_failed_attempts(client_ip):
+    if client_ip in FAILED_ATTEMPTS:
+        del FAILED_ATTEMPTS[client_ip]
+
+def get_authenticated_user(headers):
+    cookie_header = headers.get("Cookie", "")
+    if not cookie_header:
+        return None
+    cookie = http.cookies.SimpleCookie()
+    try:
+        cookie.load(cookie_header)
+    except Exception:
+        return None
+    if "warp_session" not in cookie:
+        return None
+    token = cookie["warp_session"].value
+    session = SESSIONS.get(token)
+    if not session:
+        return None
+    if time.time() > session.get("expires", 0):
+        del SESSIONS[token]
+        return None
+    return session.get("username")
+
+# ==============================================================================
+# HÀM HỖ TRỢ HỆ THỐNG
+# ==============================================================================
+
 def run_cmd(cmd, timeout=15):
-    """Run shell command and return stdout/stderr."""
     try:
         res = subprocess.run(
             cmd,
@@ -88,7 +194,6 @@ def run_cmd(cmd, timeout=15):
         return -1, "", str(e)
 
 def get_warp_status():
-    """Retrieve full status of WARP and system integrations."""
     _, status_out, _ = run_cmd("warp-cli --accept-tos status 2>/dev/null || warp-cli status 2>/dev/null", timeout=5)
     is_connected = "Connected" in status_out
     
@@ -139,13 +244,11 @@ def get_warp_status():
     }
 
 def benchmark_single_dc(dc_key, port):
-    """Benchmark a single datacenter endpoint."""
     dc = DATA_CENTERS.get(dc_key)
     if not dc:
         return None
     url = dc["url"]
     t0 = time.time()
-    # Download 3MB chunk for snappy and accurate measurement
     cmd = f"curl -m 7 --socks5-hostname 127.0.0.1:{port} -r 0-3145728 -s -w '%{{speed_download}},%{{time_starttransfer}},%{{time_total}}' -o /dev/null '{url}'"
     _, out, _ = run_cmd(cmd, timeout=9)
     duration = time.time() - t0
@@ -170,6 +273,217 @@ def benchmark_single_dc(dc_key, port):
         "latency_ms": latency_ms,
         "duration_sec": round(total_t, 2)
     }
+
+# ==============================================================================
+# GIAO DIỆN HTML (LOGIN & DASHBOARD)
+# ==============================================================================
+
+LOGIN_HTML = r"""<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Đăng Nhập - Cloudflare WARP Control Center</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #090d16;
+      --card-bg: rgba(18, 24, 38, 0.75);
+      --card-border: rgba(255, 255, 255, 0.08);
+      --primary: #f6821f;
+      --primary-hover: #fa973f;
+      --primary-glow: rgba(246, 130, 31, 0.3);
+      --accent: #00d2ff;
+      --danger: #ef4444;
+      --text: #f3f4f6;
+      --text-muted: #9ca3af;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Plus Jakarta Sans', sans-serif; }
+    body {
+      background-color: var(--bg);
+      background-image: 
+        radial-gradient(at 0% 0%, rgba(246, 130, 31, 0.12) 0px, transparent 50%),
+        radial-gradient(at 100% 100%, rgba(0, 210, 255, 0.12) 0px, transparent 50%);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .login-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-radius: 24px;
+      padding: 40px 36px;
+      width: 100%;
+      max-width: 420px;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+      text-align: center;
+      position: relative;
+    }
+    .brand-logo {
+      width: 56px;
+      height: 56px;
+      background: linear-gradient(135deg, #f6821f, #ff5e3a);
+      border-radius: 16px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 10px 30px var(--primary-glow);
+      margin-bottom: 20px;
+    }
+    .brand-logo svg { width: 30px; height: 30px; fill: white; }
+    h1 { font-size: 22px; font-weight: 800; margin-bottom: 8px; letter-spacing: -0.5px; }
+    p.sub { font-size: 13px; color: var(--text-muted); margin-bottom: 28px; line-height: 1.5; }
+    .form-group { text-align: left; margin-bottom: 20px; }
+    label { display: block; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); margin-bottom: 8px; }
+    .input-wrap { position: relative; }
+    input[type="text"], input[type="password"] {
+      width: 100%;
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 12px;
+      padding: 12px 16px;
+      color: white;
+      font-size: 14px;
+      outline: none;
+      transition: all 0.2s;
+    }
+    input[type="text"]:focus, input[type="password"]:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 16px var(--primary-glow);
+    }
+    .remember-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+    .btn-login {
+      width: 100%;
+      background: var(--primary);
+      color: white;
+      border: none;
+      border-radius: 12px;
+      padding: 13px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 6px 20px var(--primary-glow);
+      transition: all 0.2s;
+    }
+    .btn-login:hover {
+      background: var(--primary-hover);
+      transform: translateY(-1px);
+    }
+    .btn-login:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+    .alert-error {
+      background: rgba(239, 68, 68, 0.15);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      color: #fca5a5;
+      padding: 10px 14px;
+      border-radius: 10px;
+      font-size: 13px;
+      margin-bottom: 20px;
+      display: none;
+      text-align: left;
+    }
+    .footer-note {
+      margin-top: 24px;
+      font-size: 11px;
+      color: #64748b;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="login-card">
+  <div class="brand-logo">
+    <svg viewBox="0 0 24 24"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM19 18H6c-2.21 0-4-1.79-4-4 0-2.05 1.53-3.76 3.56-3.97l1.07-.11.5-.95C8.08 7.14 9.94 6 12 6c2.62 0 4.88 1.86 5.39 4.43l.3 1.5 1.53.11c1.56.1 2.78 1.41 2.78 2.96 0 1.65-1.35 3-3 3z"/></svg>
+  </div>
+  <h1>Cloudflare WARP Center</h1>
+  <p class="sub">Xác thực quyền quản trị máy chủ Data Center</p>
+
+  <div id="errorAlert" class="alert-error"></div>
+
+  <form id="loginForm" onsubmit="handleLogin(event)">
+    <div class="form-group">
+      <label>Tên đăng nhập</label>
+      <input type="text" id="username" required autocomplete="username" placeholder="admin" autofocus />
+    </div>
+
+    <div class="form-group">
+      <label>Mật khẩu</label>
+      <input type="password" id="password" required autocomplete="current-password" placeholder="••••••••" />
+    </div>
+
+    <div class="remember-row">
+      <label style="display:flex; align-items:center; gap:8px; margin:0; text-transform:none; cursor:pointer;">
+        <input type="checkbox" id="rememberMe" checked /> Ghi nhớ đăng nhập
+      </label>
+    </div>
+
+    <button type="submit" id="submitBtn" class="btn-login">Đăng nhập</button>
+  </form>
+
+  <div class="footer-note">
+    <span>🔒</span> Mã hóa SHA-256 & Chống brute-force bảo vệ
+  </div>
+</div>
+
+<script>
+  async function handleLogin(e) {
+    e.preventDefault();
+    const btn = document.getElementById('submitBtn');
+    const alertBox = document.getElementById('errorAlert');
+    const username = document.getElementById('username').value.trim();
+    const password = document.getElementById('password').value;
+    const remember = document.getElementById('rememberMe').checked;
+
+    btn.disabled = true;
+    btn.innerText = 'Đang xác thực...';
+    alertBox.style.display = 'none';
+
+    try {
+      const res = await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password, remember })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        window.location.href = '/';
+      } else {
+        alertBox.innerText = data.error || 'Sai tên đăng nhập hoặc mật khẩu!';
+        alertBox.style.display = 'block';
+      }
+    } catch (err) {
+      alertBox.innerText = 'Lỗi kết nối tới máy chủ!';
+      alertBox.style.display = 'block';
+    } finally {
+      btn.disabled = false;
+      btn.innerText = 'Đăng nhập';
+    }
+  }
+</script>
+
+</body>
+</html>
+"""
 
 HTML_TEMPLATE = r"""<!DOCTYPE html>
 <html lang="vi">
@@ -197,7 +511,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
       --text-muted: #9ca3af;
     }
 
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif; }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Plus Jakarta Sans', sans-serif; }
 
     body {
       background-color: var(--bg);
@@ -230,12 +544,14 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     .brand-text h1 { font-size: 22px; font-weight: 800; letter-spacing: -0.5px; }
     .brand-text p { font-size: 13px; color: var(--text-muted); }
 
+    .header-actions { display: flex; align-items: center; gap: 10px; }
+
     .badge-mode {
       background: rgba(16, 185, 129, 0.12);
       border: 1px solid rgba(16, 185, 129, 0.3);
       color: var(--success);
       font-size: 12px; font-weight: 600;
-      padding: 4px 10px; border-radius: 20px;
+      padding: 6px 12px; border-radius: 20px;
       display: flex; align-items: center; gap: 6px;
     }
 
@@ -328,8 +644,8 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     .btn-primary:hover { background: var(--primary-hover); transform: translateY(-1px); }
     .btn-secondary { background: rgba(255, 255, 255, 0.08); color: var(--text); border: 1px solid rgba(255, 255, 255, 0.1); }
     .btn-secondary:hover { background: rgba(255, 255, 255, 0.14); }
-    .btn-accent { background: rgba(0, 210, 255, 0.15); color: var(--accent); border: 1px solid rgba(0, 210, 255, 0.3); }
-    .btn-accent:hover { background: rgba(0, 210, 255, 0.25); }
+    .btn-danger { background: rgba(239, 68, 68, 0.15); color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.3); }
+    .btn-danger:hover { background: rgba(239, 68, 68, 0.25); }
     .btn-sm { padding: 6px 12px; font-size: 12px; }
 
     .select-style {
@@ -343,10 +659,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
       width: 100%;
       cursor: pointer;
     }
-    .select-style option {
-      background: #111827;
-      color: white;
-    }
+    .select-style option { background: #111827; color: white; }
 
     .speed-gauge { text-align: center; padding: 12px 0; }
     .speed-number { font-family: 'JetBrains Mono', monospace; font-size: 36px; font-weight: 800; color: var(--accent); }
@@ -358,33 +671,22 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
       font-size: 12px;
     }
     .benchmark-table th {
-      text-align: left;
-      padding: 8px 10px;
-      color: var(--text-muted);
+      text-align: left; padding: 8px 10px; color: var(--text-muted);
       border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-      font-weight: 600;
-      text-transform: uppercase;
-      font-size: 11px;
+      font-weight: 600; text-transform: uppercase; font-size: 11px;
     }
-    .benchmark-table td {
-      padding: 9px 10px;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-    }
+    .benchmark-table td { padding: 9px 10px; border-bottom: 1px solid rgba(255, 255, 255, 0.04); }
     .benchmark-table tr:last-child td { border-bottom: none; }
 
     .terminal-box {
-      background: #04070d;
-      border: 1px solid rgba(255, 255, 255, 0.06);
+      background: #04070d; border: 1px solid rgba(255, 255, 255, 0.06);
       border-radius: 12px; padding: 16px;
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 12px; color: #94a3b8;
-      max-height: 180px; overflow-y: auto;
-      white-space: pre-wrap; line-height: 1.6;
+      font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #94a3b8;
+      max-height: 180px; overflow-y: auto; white-space: pre-wrap; line-height: 1.6;
     }
 
     .code-snippet {
-      background: rgba(0, 0, 0, 0.35);
-      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(0, 0, 0, 0.35); border: 1px solid rgba(255, 255, 255, 0.08);
       border-radius: 10px; padding: 12px 14px;
       font-family: 'JetBrains Mono', monospace; font-size: 12px;
       display: flex; justify-content: space-between; align-items: center; margin-top: 8px;
@@ -399,6 +701,38 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
       display: none; align-items: center; gap: 10px;
       font-size: 13px; font-weight: 500; z-index: 999;
     }
+
+    .modal-backdrop {
+      position: fixed; inset: 0; background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(8px); display: none; align-items: center; justify-content: center;
+      z-index: 1000; animation: fadeIn 0.2s ease;
+    }
+    .modal-card {
+      background: #0f172a; border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 16px; padding: 24px; width: 90%; max-width: 420px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+    }
+    .modal-header {
+      display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px;
+    }
+    .modal-header h3 { font-size: 16px; font-weight: 700; color: white; margin: 0; }
+    .modal-close {
+      background: none; border: none; font-size: 24px; color: var(--text-muted);
+      cursor: pointer; line-height: 1; padding: 0 4px;
+    }
+    .modal-close:hover { color: white; }
+    .input-style {
+      width: 100%; box-sizing: border-box; background: rgba(0, 0, 0, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 8px;
+      padding: 10px 14px; color: white; font-size: 13px; outline: none;
+      transition: border-color 0.2s;
+    }
+    .input-style:focus { border-color: var(--primary); }
+    .modal-alert {
+      padding: 10px 14px; border-radius: 8px; font-size: 12px; margin-bottom: 14px; display: none;
+    }
+    .modal-alert-error { background: rgba(239, 68, 68, 0.15); color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.3); }
+    .modal-alert-success { background: rgba(16, 185, 129, 0.15); color: #6ee7b7; border: 1px solid rgba(16, 185, 129, 0.3); }
   </style>
 </head>
 <body>
@@ -414,9 +748,17 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         <p>Bảng điều khiển & Tối ưu hóa SOCKS5 Proxy cho Máy chủ Data Center</p>
       </div>
     </div>
-    <div class="badge-mode">
-      <div class="dot"></div>
-      Proxy Mode (SOCKS5)
+    <div class="header-actions">
+      <div class="badge-mode">
+        <div class="dot"></div>
+        Proxy Mode (SOCKS5)
+      </div>
+      <button onclick="openChangePasswordModal()" class="btn btn-secondary btn-sm" title="Đổi mật khẩu Web Dashboard">
+        🔑 Đổi mật khẩu
+      </button>
+      <button onclick="logout()" class="btn btn-secondary btn-sm" title="Đăng xuất khỏi phiên làm việc">
+        🚪 Đăng xuất
+      </button>
     </div>
   </header>
 
@@ -622,6 +964,10 @@ environment = [
   async function fetchStatus() {
     try {
       const res = await fetch('/api/status');
+      if (res.status === 401) {
+        window.location.href = '/login';
+        return;
+      }
       const data = await res.json();
       currentStatus = data;
       renderStatus(data);
@@ -754,7 +1100,7 @@ environment = [
       singleBox.style.display = 'none';
       allBox.style.display = 'block';
       const tbody = document.getElementById('allResultsTbody');
-      tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:#9ca3af; padding:15px;">Đang lần lượt đo kiểm các trạm toàn cầu...</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:#9ca3af; padding:15px;">Đang song song đo kiểm 8 trạm toàn cầu...</td></tr>';
 
       try {
         const res = await fetch('/api/test-speed', {
@@ -810,12 +1156,23 @@ environment = [
     box.innerText = 'Đang tải...';
     try {
       const res = await fetch('/api/logs');
+      if (res.status === 401) {
+        window.location.href = '/login';
+        return;
+      }
       const data = await res.json();
       box.innerText = data.logs || 'Không có log.';
       box.scrollTop = box.scrollHeight;
     } catch (e) {
       box.innerText = 'Không thể tải log: ' + e;
     }
+  }
+
+  async function logout() {
+    try {
+      await fetch('/api/logout', { method: 'POST' });
+    } catch (e) {}
+    window.location.href = '/login';
   }
 
   function showToast(msg) {
@@ -830,51 +1187,200 @@ environment = [
     showToast('Đã sao chép vào bộ nhớ tạm!');
   }
 
+  function openChangePasswordModal() {
+    document.getElementById('modalCurrentPass').value = '';
+    document.getElementById('modalNewPass').value = '';
+    document.getElementById('modalConfirmPass').value = '';
+    const alert = document.getElementById('modalAlert');
+    alert.style.display = 'none';
+    alert.className = 'modal-alert';
+    document.getElementById('changePasswordModal').style.display = 'flex';
+  }
+
+  function closeChangePasswordModal() {
+    document.getElementById('changePasswordModal').style.display = 'none';
+  }
+
+  async function submitChangePassword() {
+    const cur = document.getElementById('modalCurrentPass').value;
+    const np = document.getElementById('modalNewPass').value;
+    const cp = document.getElementById('modalConfirmPass').value;
+    const alert = document.getElementById('modalAlert');
+    const btn = document.getElementById('btnSubmitPass');
+
+    alert.style.display = 'none';
+
+    if (!cur || !np || !cp) {
+      alert.innerText = 'Vui lòng điền đầy đủ các thông tin!';
+      alert.className = 'modal-alert modal-alert-error';
+      alert.style.display = 'block';
+      return;
+    }
+    if (np.length < 6) {
+      alert.innerText = 'Mật khẩu mới phải có ít nhất 6 ký tự!';
+      alert.className = 'modal-alert modal-alert-error';
+      alert.style.display = 'block';
+      return;
+    }
+    if (np !== cp) {
+      alert.innerText = 'Mật khẩu xác nhận không khớp!';
+      alert.className = 'modal-alert modal-alert-error';
+      alert.style.display = 'block';
+      return;
+    }
+
+    btn.disabled = true;
+    btn.innerText = 'Đang xử lý...';
+
+    try {
+      const res = await fetch('/api/change-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ current_password: cur, new_password: np })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        alert.innerText = 'Đổi mật khẩu thành công! Đang chuyển về trang đăng nhập...';
+        alert.className = 'modal-alert modal-alert-success';
+        alert.style.display = 'block';
+        setTimeout(() => {
+          window.location.href = '/login';
+        }, 1500);
+      } else {
+        alert.innerText = data.error || 'Đổi mật khẩu thất bại!';
+        alert.className = 'modal-alert modal-alert-error';
+        alert.style.display = 'block';
+        btn.disabled = false;
+        btn.innerText = 'Cập nhật mật khẩu';
+      }
+    } catch (e) {
+      alert.innerText = 'Lỗi kết nối máy chủ: ' + e;
+      alert.className = 'modal-alert modal-alert-error';
+      alert.style.display = 'block';
+      btn.disabled = false;
+      btn.innerText = 'Cập nhật mật khẩu';
+    }
+  }
+
   fetchStatus();
   loadLogs();
   setInterval(fetchStatus, 10000);
 </script>
 
+<!-- Modal Đổi Mật Khẩu -->
+<div id="changePasswordModal" class="modal-backdrop">
+  <div class="modal-card">
+    <div class="modal-header">
+      <h3>🔐 Đổi Mật Khẩu Quản Trị</h3>
+      <button onclick="closeChangePasswordModal()" class="modal-close">&times;</button>
+    </div>
+    <div id="modalAlert" class="modal-alert"></div>
+    <div style="margin-bottom: 14px;">
+      <label style="font-size:12px; color:var(--text-muted); display:block; margin-bottom:6px;">Mật khẩu hiện tại</label>
+      <input type="password" id="modalCurrentPass" class="input-style" placeholder="Nhập mật khẩu hiện tại" />
+    </div>
+    <div style="margin-bottom: 14px;">
+      <label style="font-size:12px; color:var(--text-muted); display:block; margin-bottom:6px;">Mật khẩu mới (ít nhất 6 ký tự)</label>
+      <input type="password" id="modalNewPass" class="input-style" placeholder="Nhập mật khẩu mới" />
+    </div>
+    <div style="margin-bottom: 20px;">
+      <label style="font-size:12px; color:var(--text-muted); display:block; margin-bottom:6px;">Xác nhận mật khẩu mới</label>
+      <input type="password" id="modalConfirmPass" class="input-style" placeholder="Nhập lại mật khẩu mới" />
+    </div>
+    <div style="display:flex; justify-content:flex-end; gap:10px;">
+      <button onclick="closeChangePasswordModal()" class="btn btn-secondary btn-sm">Hủy</button>
+      <button onclick="submitChangePassword()" class="btn btn-primary btn-sm" id="btnSubmitPass">Cập nhật mật khẩu</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
 """
+
+# ==============================================================================
+# HTTP REQUEST HANDLER
+# ==============================================================================
 
 class WarpAPIHandler(http.server.BaseHTTPRequestHandler):
     def log_message(self, format, *args):
         pass
 
+    def get_client_ip(self):
+        forwarded = self.headers.get("X-Forwarded-For")
+        if forwarded:
+            return forwarded.split(",")[0].strip()
+        return self.client_address[0]
+
     def send_json(self, data, code=200):
         self.send_response(code)
         self.send_header("Content-Type", "application/json; charset=utf-8")
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Cache-Control", "no-cache")
+        self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("X-Frame-Options", "DENY")
+        self.send_header("Referrer-Policy", "strict-origin-when-cross-origin")
         self.end_headers()
         self.wfile.write(json.dumps(data).encode("utf-8"))
+
+    def send_redirect(self, location):
+        self.send_response(302)
+        self.send_header("Location", location)
+        self.end_headers()
+
+    def do_HEAD(self):
+        self.do_GET()
 
     def do_GET(self):
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path
+        user = get_authenticated_user(self.headers)
 
-        if path == "/" or path == "/index.html":
+        # 1. Trang Login
+        if path == "/login":
+            if user:
+                self.send_redirect("/")
+                return
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("X-Frame-Options", "DENY")
+            self.end_headers()
+            self.wfile.write(LOGIN_HTML.encode("utf-8"))
+            return
+
+        # 2. Trang Dashboard chính (Yêu cầu đăng nhập)
+        if path == "/" or path == "/index.html":
+            if not user:
+                self.send_redirect("/login")
+                return
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("X-Frame-Options", "DENY")
             self.end_headers()
             self.wfile.write(HTML_TEMPLATE.encode("utf-8"))
             return
 
-        if path == "/api/status":
-            status = get_warp_status()
-            self.send_json(status)
-            return
+        # 3. API Endpoints (Bảo vệ bằng Session Cookie)
+        if path.startswith("/api/"):
+            if not user:
+                self.send_json({"error": "Unauthorized", "login_required": True}, code=401)
+                return
 
-        if path == "/api/regions":
-            self.send_json(DATA_CENTERS)
-            return
+            if path == "/api/status":
+                status = get_warp_status()
+                status["user"] = user
+                self.send_json(status)
+                return
 
-        if path == "/api/logs":
-            _, logs, _ = run_cmd("journalctl -u warp-svc -n 40 --no-pager 2>/dev/null", timeout=5)
-            self.send_json({"logs": logs})
-            return
+            if path == "/api/regions":
+                self.send_json(DATA_CENTERS)
+                return
+
+            if path == "/api/logs":
+                _, logs, _ = run_cmd("journalctl -u warp-svc -n 40 --no-pager 2>/dev/null", timeout=5)
+                self.send_json({"logs": logs})
+                return
 
         self.send_response(404)
         self.end_headers()
@@ -882,6 +1388,7 @@ class WarpAPIHandler(http.server.BaseHTTPRequestHandler):
     def do_POST(self):
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path
+        client_ip = self.get_client_ip()
 
         content_len = int(self.headers.get("Content-Length", 0))
         body = self.rfile.read(content_len).decode("utf-8") if content_len > 0 else "{}"
@@ -889,6 +1396,91 @@ class WarpAPIHandler(http.server.BaseHTTPRequestHandler):
             req_data = json.loads(body)
         except Exception:
             req_data = {}
+
+        # 1. API Đăng Nhập (Công khai, có chống Brute-force)
+        if path == "/api/login":
+            if check_rate_limit(client_ip):
+                self.send_json({"success": False, "error": "Đã thử sai quá 5 lần. Vui lòng đợi 5 phút để thử lại!"}, code=429)
+                return
+
+            username = req_data.get("username", "").strip()
+            password = req_data.get("password", "")
+            remember = req_data.get("remember", True)
+
+            if verify_credentials(username, password):
+                clear_failed_attempts(client_ip)
+                token = secrets.token_hex(32)
+                # 7 ngày nếu remember, 24 giờ nếu không
+                ttl = 86400 * 7 if remember else 86400
+                SESSIONS[token] = {
+                    "username": username,
+                    "expires": time.time() + ttl
+                }
+
+                cookie = http.cookies.SimpleCookie()
+                cookie["warp_session"] = token
+                cookie["warp_session"]["path"] = "/"
+                cookie["warp_session"]["httponly"] = True
+                cookie["warp_session"]["max-age"] = ttl
+                cookie["warp_session"]["samesite"] = "Lax"
+
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Set-Cookie", cookie.output(header="").strip())
+                self.end_headers()
+                self.wfile.write(json.dumps({"success": True}).encode("utf-8"))
+                return
+            else:
+                record_failed_attempt(client_ip)
+                self.send_json({"success": False, "error": "Sai tên đăng nhập hoặc mật khẩu!"}, code=401)
+                return
+
+        # 2. API Đăng Xuất
+        if path == "/api/logout":
+            cookie_header = self.headers.get("Cookie", "")
+            if cookie_header:
+                c = http.cookies.SimpleCookie()
+                try:
+                    c.load(cookie_header)
+                    if "warp_session" in c:
+                        token = c["warp_session"].value
+                        if token in SESSIONS:
+                            del SESSIONS[token]
+                except Exception:
+                    pass
+
+            cookie = http.cookies.SimpleCookie()
+            cookie["warp_session"] = ""
+            cookie["warp_session"]["path"] = "/"
+            cookie["warp_session"]["httponly"] = True
+            cookie["warp_session"]["max-age"] = 0
+
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Set-Cookie", cookie.output(header="").strip())
+            self.end_headers()
+            self.wfile.write(json.dumps({"success": True}).encode("utf-8"))
+            return
+
+        # 3. Tất cả các API quản trị bên dưới BẮT BUỘC ĐÃ ĐĂNG NHẬP
+        user = get_authenticated_user(self.headers)
+        if not user:
+            self.send_json({"error": "Unauthorized", "login_required": True}, code=401)
+            return
+
+        # Đổi mật khẩu tài khoản
+        if path == "/api/change-password":
+            cur_pass = req_data.get("current_password", "")
+            new_pass = req_data.get("new_password", "")
+            if not verify_credentials(user, cur_pass):
+                self.send_json({"success": False, "error": "Mật khẩu hiện tại không chính xác!"}, code=400)
+                return
+            if len(new_pass) < 6:
+                self.send_json({"success": False, "error": "Mật khẩu mới phải có tối thiểu 6 ký tự!"}, code=400)
+                return
+            set_password(new_pass, username=user)
+            self.send_json({"success": True, "message": "Đã cập nhật mật khẩu thành công!"})
+            return
 
         if path == "/api/connect":
             run_cmd("warp-cli --accept-tos connect 2>/dev/null || warp-cli connect 2>/dev/null")
@@ -967,7 +1559,6 @@ Environment="NO_PROXY=localhost,127.0.0.1,docker.io,*.docker.io,*.docker.com,pro
                         res = future.result()
                         if res:
                             results.append(res)
-                # Keep original order
                 order = list(DATA_CENTERS.keys())
                 results.sort(key=lambda x: order.index(x["id"]) if x["id"] in order else 99)
                 self.send_json({"success": True, "results": results})
@@ -985,10 +1576,26 @@ Environment="NO_PROXY=localhost,127.0.0.1,docker.io,*.docker.io,*.docker.com,pro
         self.end_headers()
 
 def main():
+    if "--set-password" in sys.argv:
+        idx = sys.argv.index("--set-password")
+        if idx + 1 < len(sys.argv):
+            new_pass = sys.argv[idx + 1]
+            set_password(new_pass)
+            print(f"Đã cập nhật mật khẩu Web Dashboard thành công!")
+            sys.exit(0)
+        else:
+            print("Lỗi: Thiếu tham số mật khẩu! Cú pháp: python3 web_dashboard.py --set-password <new_password>")
+            sys.exit(1)
+
+    # Khởi tạo thông tin xác thực nếu chưa có
+    auth_data = init_auth()
+    
     print("=" * 64)
     print("  CLOUDFLARE WARP WEB DASHBOARD & REST API")
     print(f"  Listening on: http://{HOST}:{PORT}")
     print(f"  Access locally: http://127.0.0.1:{PORT}")
+    print(f"  Default Login: Username: '{auth_data.get('username')}'")
+    print(f"  Auth Config  : {AUTH_FILE}")
     print("=" * 64)
 
     socketserver.TCPServer.allow_reuse_address = True
