@@ -225,16 +225,20 @@ toggle_docker() {
         systemctl daemon-reload && systemctl restart docker
         echo -e "${GREEN}Đã tắt proxy Docker thành công. Docker sẽ kéo trực tiếp.${NC}"
     else
+        local docker_proxy="socks5://127.0.0.1:${port}"
+        if python3 -c "import socket; s=socket.socket(); s.settimeout(0.3); r=s.connect_ex(('127.0.0.1', 8118)); s.close(); exit(0 if r==0 else 1)" 2>/dev/null; then
+            docker_proxy="http://127.0.0.1:8118"
+        fi
         echo -e "${YELLOW}Đang bật proxy cho Docker Daemon (kèm NO_PROXY Docker Hub)...${NC}"
         mkdir -p /etc/systemd/system/docker.service.d
         cat <<EOF > "$conf_file"
 [Service]
-Environment="HTTP_PROXY=socks5://127.0.0.1:${port}"
-Environment="HTTPS_PROXY=socks5://127.0.0.1:${port}"
-Environment="NO_PROXY=localhost,127.0.0.1,docker.io,*.docker.io,*.docker.com,production.cloudflare.docker.com,103.186.100.0/23"
+Environment="HTTP_PROXY=${docker_proxy}"
+Environment="HTTPS_PROXY=${docker_proxy}"
+Environment="NO_PROXY=localhost,127.0.0.1,docker.io,*.docker.io,*.docker.com,production.cloudflare.docker.com,deb.debian.org,*.debian.org,archive.ubuntu.com,security.ubuntu.com,103.186.100.0/23,192.168.200.0/24"
 EOF
         systemctl daemon-reload && systemctl restart docker
-        echo -e "${GREEN}Đã bật proxy Docker thành công!${NC}"
+        echo -e "${GREEN}Đã bật proxy Docker thành công (Proxy: ${docker_proxy})!${NC}"
     fi
 }
 

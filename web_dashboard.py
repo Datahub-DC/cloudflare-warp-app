@@ -3427,10 +3427,15 @@ class WarpAPIHandler(http.server.BaseHTTPRequestHandler):
             conf_path = f"{conf_dir}/http-proxy.conf"
 
             if enable:
+                privoxy_active = is_port_open("127.0.0.1", 8118)
+                if not privoxy_active and shutil.which("privoxy"):
+                    ensure_privoxy(port)
+                    privoxy_active = is_port_open("127.0.0.1", 8118)
+                docker_proxy_url = "http://127.0.0.1:8118" if privoxy_active else f"socks5://127.0.0.1:{port}"
                 os.makedirs(conf_dir, exist_ok=True)
                 content = f"""[Service]
-Environment="HTTP_PROXY=socks5://127.0.0.1:{port}"
-Environment="HTTPS_PROXY=socks5://127.0.0.1:{port}"
+Environment="HTTP_PROXY={docker_proxy_url}"
+Environment="HTTPS_PROXY={docker_proxy_url}"
 Environment="NO_PROXY={no_proxy}"
 """
                 with open(conf_path, "w") as f:
