@@ -234,6 +234,206 @@ def get_docker_info():
             "error": str(e)
         }
 
+RESIDENTIAL_PROXY_FILE = os.environ.get("RESIDENTIAL_PROXY_FILE", "/root/linux-cloudflare-warp/.residential_proxy.json")
+
+def load_residential_proxy():
+    if os.path.exists(RESIDENTIAL_PROXY_FILE):
+        try:
+            with open(RESIDENTIAL_PROXY_FILE, "r") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {
+        "enabled": False,
+        "proto": "socks5",
+        "host": "",
+        "port": 1080,
+        "username": "",
+        "password": "",
+        "no_proxy": "localhost,127.0.0.1,docker.io,*.docker.io,*.docker.com,production.cloudflare.docker.com,103.186.100.0/23,192.168.200.0/24",
+        "active_source": "warp",
+        "last_test": None
+    }
+
+def save_residential_proxy(data):
+    current = load_residential_proxy()
+    if isinstance(data, dict):
+        if "password" in data and not data["password"] and current.get("password"):
+            data["password"] = current["password"]
+        for k, v in data.items():
+            current[k] = v
+    else:
+        current = data
+    os.makedirs(os.path.dirname(RESIDENTIAL_PROXY_FILE) if os.path.dirname(RESIDENTIAL_PROXY_FILE) else ".", exist_ok=True)
+    with open(RESIDENTIAL_PROXY_FILE, "w") as f:
+        json.dump(current, f, indent=2)
+    os.chmod(RESIDENTIAL_PROXY_FILE, 0o600)
+    return True
+
+def parse_proxy_string(raw):
+    if not raw or not isinstance(raw, str):
+        return None
+    raw = raw.strip()
+    proto = "socks5"
+    if "://" in raw:
+        p, rest = raw.split("://", 1)
+        if p.lower() in ["socks5", "http", "https"]:
+            proto = p.lower()
+            raw = rest
+    
+    if "@" in raw:
+        auth_part, host_part = raw.split("@", 1)
+        if ":" in auth_part:
+            user, pwd = auth_part.split(":", 1)
+        else:
+            user, pwd = auth_part, ""
+        if ":" in host_part:
+            host, port = host_part.split(":", 1)
+        else:
+            host, port = host_part, "1080"
+        try:
+            return {"proto": proto, "host": host.strip(), "port": int(port.strip()), "username": user.strip(), "password": pwd.strip()}
+        except Exception:
+            return None
+
+    parts = raw.split(":")
+    if len(parts) == 4:
+        try:
+            return {"proto": proto, "host": parts[0].strip(), "port": int(parts[1].strip()), "username": parts[2].strip(), "password": parts[3].strip()}
+        except Exception:
+            return None
+    elif len(parts) == 2:
+        try:
+            return {"proto": proto, "host": parts[0].strip(), "port": int(parts[1].strip()), "username": "", "password": ""}
+        except Exception:
+            return None
+    return None
+
+def get_proxy_url(config, hide_password=False):
+    if not config:
+        return ""
+    proto = config.get("proto", "socks5").lower()
+    host = str(config.get("host", "")).strip()
+    port = str(config.get("port", "")).strip()
+    username = str(config.get("username", "")).strip()
+    password = str(config.get("password", "")).strip()
+
+    if not host or not port:
+        return ""
+
+    if username:
+        user_enc = urllib.parse.quote_plus(username)
+        pass_display = "******" if hide_password else urllib.parse.quote_plus(password)
+        return f"{proto}://{user_enc}:{pass_display}@{host}:{port}"
+    return f"{proto}://{host}:{port}"
+
+def test_residential_proxy(config):
+    proxy_url = get_proxy_url(config, hide_password=False)
+    if not proxy_url:
+        return {"success": False, "error": "Chưa nhập đầy đủ Host và Port của Proxy!"}
+
+    t0 = time.time()
+    cmd = ["curl", "-m", "10", "-s", "-x", proxy_url, "-w", "%{time_starttransfer}", "https://cloudflare.com/cdn-cgi/trace"]
+    p = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=12)
+    
+    if p.returncode != 0:
+        err_msg = p.stderr.strip() or f"Không thể kết nối đến proxy qua {config.get('host')}:{config.get('port')} (Mã lỗi: {p.returncode})"
+        return {"success": False, "error": err_msg}
+    
+    trace_out = p.stdout
+    ttfb = 0
+    time_m = re.search(r"(\d+\.\d+)$", trace_out)
+    if time_m:
+        try:
+            ttfb = round(float(time_m.group(1)) * 1000, 1)
+        except Exception:
+            pass
+
+    ip_m = re.search(r"ip=([^\s]+)", trace_out)
+    egress_ip = ip_m.group(1) if ip_m else "Unknown"
+    loc_m = re.search(r"loc=([A-Z0-9]+)", trace_out)
+    loc = loc_m.group(1) if loc_m else ""
+    colo_m = re.search(r"colo=([A-Z0-9]+)", trace_out)
+    colo = colo_m.group(1) if colo_m else ""
+    warp_status = "warp=on" in trace_out
+
+    speed_mb_s = 0.0
+    try:
+        speed_url = "https://speed.cloudflare.com/__down?bytes=5000000"
+        speed_cmd = ["curl", "-m", "8", "-s", "-x", proxy_url, "-w", "%{speed_download}", "-o", "/dev/null", speed_url]
+        sp = subprocess.run(speed_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=10)
+        if sp.returncode == 0 and sp.stdout.strip():
+            raw_spd = float(sp.stdout.strip())
+            speed_mb_s = round(raw_spd / (1024 * 1024), 2)
+    except Exception:
+        pass
+
+    isp = "Residential / ISP"
+    country_name = loc
+    city = ""
+    try:
+        ip_cmd = ["curl", "-m", "4", "-s", f"http://ip-api.com/json/{egress_ip}"]
+        ip_res = subprocess.run(ip_cmd, stdout=subprocess.PIPE, text=True, timeout=5)
+        if ip_res.returncode == 0:
+            ip_info = json.loads(ip_res.stdout)
+            if ip_info.get("status") == "success":
+                isp = ip_info.get("isp") or ip_info.get("org") or isp
+                country_name = ip_info.get("country") or country_name
+                city = ip_info.get("city") or ""
+    except Exception:
+        pass
+
+    result = {
+        "success": True,
+        "proxy_url_masked": get_proxy_url(config, hide_password=True),
+        "ip": egress_ip,
+        "loc": loc,
+        "colo": colo,
+        "isp": isp,
+        "city": city,
+        "country": country_name,
+        "latency_ms": ttfb,
+        "speed_mb_s": speed_mb_s,
+        "is_warp": warp_status,
+        "tested_at": int(time.time())
+    }
+    return result
+
+def apply_proxy_to_docker(proxy_url, no_proxy):
+    if not no_proxy:
+        no_proxy = "localhost,127.0.0.1,docker.io,*.docker.io,*.docker.com,production.cloudflare.docker.com,103.186.100.0/23,192.168.200.0/24"
+    conf_dir = "/etc/systemd/system/docker.service.d"
+    conf_path = f"{conf_dir}/http-proxy.conf"
+    os.makedirs(conf_dir, exist_ok=True)
+    content = f"""[Service]
+Environment="HTTP_PROXY={proxy_url}"
+Environment="HTTPS_PROXY={proxy_url}"
+Environment="NO_PROXY={no_proxy}"
+"""
+    with open(conf_path, "w") as f:
+        f.write(content)
+    run_cmd("systemctl daemon-reload && systemctl restart docker", timeout=30)
+    time.sleep(1)
+    return get_docker_info()
+
+def apply_proxy_to_git(proxy_url):
+    run_cmd(f"git config --global http.\"https://github.com/\".proxy \"{proxy_url}\"")
+    run_cmd(f"git config --global http.\"https://gitlab.com/\".proxy \"{proxy_url}\"")
+    return True
+
+def restore_warp_proxy():
+    status = get_warp_status()
+    port = status.get("port", 40000)
+    warp_proxy_url = f"socks5://127.0.0.1:{port}"
+    no_proxy = "localhost,127.0.0.1,docker.io,*.docker.io,*.docker.com,production.cloudflare.docker.com,103.186.100.0/23,192.168.200.0/24"
+    apply_proxy_to_docker(warp_proxy_url, no_proxy)
+    apply_proxy_to_git(warp_proxy_url)
+    res_cfg = load_residential_proxy()
+    res_cfg["active_source"] = "warp"
+    res_cfg["enabled"] = False
+    save_residential_proxy(res_cfg)
+    return True
+
 def get_warp_status():
     _, status_out, _ = run_cmd("warp-cli --accept-tos status 2>/dev/null || warp-cli status 2>/dev/null", timeout=5)
     is_connected = "Connected" in status_out
@@ -272,6 +472,8 @@ def get_warp_status():
     _, gitlab_proxy_out, _ = run_cmd("git config --global http.\"https://gitlab.com/\".proxy")
     gitlab_proxy_enabled = bool(gitlab_proxy_out)
 
+    res_cfg = load_residential_proxy()
+
     return {
         "connected": is_connected,
         "warp_active": warp_on,
@@ -282,7 +484,20 @@ def get_warp_status():
         "docker_info": get_docker_info(),
         "git_proxy": git_proxy_enabled,
         "gitlab_proxy": gitlab_proxy_enabled,
-        "raw_status": status_out or "WARP Service Offline"
+        "raw_status": status_out or "WARP Service Offline",
+        "residential_proxy": {
+            "configured": bool(res_cfg.get("host") and res_cfg.get("port")),
+            "enabled": res_cfg.get("enabled", False),
+            "proto": res_cfg.get("proto", "socks5"),
+            "host": res_cfg.get("host", ""),
+            "port": res_cfg.get("port", 1080),
+            "username": res_cfg.get("username", ""),
+            "has_password": bool(res_cfg.get("password")),
+            "no_proxy": res_cfg.get("no_proxy", ""),
+            "active_source": res_cfg.get("active_source", "warp"),
+            "proxy_url_masked": get_proxy_url(res_cfg, hide_password=True),
+            "last_test": res_cfg.get("last_test")
+        }
     }
 
 def benchmark_single_dc(dc_key, port):
@@ -624,6 +839,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 
     .card:hover { border-color: rgba(255, 255, 255, 0.15); }
 
+    .col-3 { grid-column: span 3; }
     .col-4 { grid-column: span 4; }
     .col-5 { grid-column: span 5; }
     .col-6 { grid-column: span 6; }
@@ -632,7 +848,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     .col-12 { grid-column: span 12; }
 
     @media (max-width: 860px) {
-      .col-7, .col-5, .col-6, .col-4, .col-8 { grid-column: span 12; }
+      .col-7, .col-5, .col-6, .col-4, .col-3, .col-8 { grid-column: span 12; }
     }
 
     /* Tabs Navigation Bar */
@@ -941,6 +1157,9 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     <button class="tab-btn" onclick="switchTab('docker')" id="tabBtn-docker">
       <span>🐳</span> <span>Docker & Build</span>
     </button>
+    <button class="tab-btn" onclick="switchTab('residential')" id="tabBtn-residential">
+      <span>🏡</span> <span>Proxy Dân Cư</span>
+    </button>
     <button class="tab-btn" onclick="switchTab('gitlab')" id="tabBtn-gitlab">
       <span>🦊</span> <span>GitLab CI/CD</span>
     </button>
@@ -987,30 +1206,45 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         </div>
       </div>
 
-      <!-- Quick Action Cards (3 x col-4) -->
-      <div class="card col-4 metric-card">
+      <!-- Quick Action Cards (4 x col-3) -->
+      <div class="card col-3 metric-card">
         <div>
           <div class="metric-header">
-            <span class="metric-title">🐳 Docker Proxy & Build</span>
+            <span class="metric-title">🐳 Docker Proxy</span>
             <span id="ovDockerBadge" class="badge-status inactive">○ Đang kiểm tra...</span>
           </div>
           <p style="font-size: 12px; color: var(--text-muted); margin: 0 0 14px 0; line-height: 1.5;">
-            Cấu hình daemon proxy, reload daemon không gián đoạn, và chạy lệnh docker build trực tiếp trên UI.
+            Cấu hình daemon proxy, reload daemon không gián đoạn, và chạy lệnh docker build trực tiếp.
           </p>
         </div>
         <button onclick="switchTab('docker')" class="btn btn-primary btn-sm" style="width: 100%;">
-          Docker & Build Console ➔
+          Docker Console ➔
         </button>
       </div>
 
-      <div class="card col-4 metric-card">
+      <div class="card col-3 metric-card">
+        <div>
+          <div class="metric-header">
+            <span class="metric-title">🏡 Proxy Dân Cư</span>
+            <span id="ovResProxyBadge" class="badge-status inactive">○ Đang kiểm tra...</span>
+          </div>
+          <p style="font-size: 12px; color: var(--text-muted); margin: 0 0 14px 0; line-height: 1.5;">
+            Kết nối upstream proxy dân cư / private IP sạch, tốc độ tải vượt trội và chống chặn.
+          </p>
+        </div>
+        <button onclick="switchTab('residential')" class="btn btn-secondary btn-sm" style="width: 100%;">
+          Proxy Dân Cư ➔
+        </button>
+      </div>
+
+      <div class="card col-3 metric-card">
         <div>
           <div class="metric-header">
             <span class="metric-title">🐙 Git & GitLab CLI</span>
             <span id="ovGitBadge" class="badge-status inactive">○ Đang kiểm tra...</span>
           </div>
           <p style="font-size: 12px; color: var(--text-muted); margin: 0 0 14px 0; line-height: 1.5;">
-            Chỉ định tuyến riêng git clone/push của GitHub & GitLab đi qua WARP SOCKS5, không ảnh hưởng Git nội bộ.
+            Chỉ định tuyến riêng git clone/push của GitHub & GitLab đi qua Proxy, không ảnh hưởng Git nội bộ.
           </p>
         </div>
         <button onclick="switchTab('routing')" class="btn btn-secondary btn-sm" style="width: 100%;">
@@ -1018,17 +1252,17 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         </button>
       </div>
 
-      <div class="card col-4 metric-card">
+      <div class="card col-3 metric-card">
         <div>
           <div class="metric-header">
             <span class="metric-title">⚡ Đo Tốc Độ Mạng</span>
             <span class="badge-status active">8 Trạm Toàn Cầu</span>
           </div>
           <p style="font-size: 12px; color: var(--text-muted); margin: 0 0 14px 0; line-height: 1.5;">
-            Kiểm tra băng thông và độ trễ đến Singapore, Nhật Bản, Đức, Mỹ, Anh, Phần Lan hoặc Benchmark toàn bộ.
+            Kiểm tra băng thông và độ trễ đến Singapore, Nhật Bản, Đức, Mỹ, Anh, Phần Lan.
           </p>
         </div>
-        <button onclick="switchTab('speedtest')" class="btn btn-primary btn-sm" style="width: 100%;">
+        <button onclick="switchTab('speedtest')" class="btn btn-secondary btn-sm" style="width: 100%;">
           Kiểm tra tốc độ ➔
         </button>
       </div>
@@ -1327,22 +1561,29 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         </div>
 
         <!-- Build Options Checkboxes -->
-        <div style="display: flex; gap: 18px; flex-wrap: wrap; margin-bottom: 14px; background: rgba(255, 255, 255, 0.02); padding: 10px 14px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.05);">
+        <div style="display: flex; gap: 14px; flex-wrap: wrap; align-items: center; margin-bottom: 14px; background: rgba(255, 255, 255, 0.02); padding: 10px 14px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.05);">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <label style="font-size: 12px; font-weight: 600; color: var(--text);">Nguồn Proxy:</label>
+            <select id="dockerBuildProxySource" class="select-style" style="width: auto; padding: 4px 8px; font-size: 12px;">
+              <option value="warp">⚡ Cloudflare WARP (127.0.0.1:40000)</option>
+              <option value="residential">🏡 Proxy Dân Cư (Residential)</option>
+            </select>
+          </div>
           <label style="font-size: 12px; display: flex; align-items: center; gap: 6px; cursor: pointer;">
             <input type="checkbox" id="chkInjectProxy" checked>
-            <span>Inject <code>--build-arg HTTP_PROXY=socks5://127.0.0.1:40000</code></span>
+            <span>Inject build-arg Proxy</span>
           </label>
           <label style="font-size: 12px; display: flex; align-items: center; gap: 6px; cursor: pointer;">
             <input type="checkbox" id="chkNetworkHost" checked>
-            <span>Sử dụng <code>--network host</code> (Bắt buộc để kết nối SOCKS5 Host)</span>
+            <span>Sử dụng <code>--network host</code></span>
           </label>
           <label style="font-size: 12px; display: flex; align-items: center; gap: 6px; cursor: pointer;">
             <input type="checkbox" id="chkNoCache" checked>
-            <span>Sử dụng <code>--no-cache</code> (Kiểm tra tốc độ tải thực tế)</span>
+            <span>Sử dụng <code>--no-cache</code></span>
           </label>
           <label style="font-size: 12px; display: flex; align-items: center; gap: 6px; cursor: pointer;">
             <input type="checkbox" id="chkAutoCleanup">
-            <span>Tự động dọn dẹp image sau khi build</span>
+            <span>Tự động dọn dẹp image</span>
           </label>
         </div>
 
@@ -1373,6 +1614,202 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
           </div>
         </div>
 
+      </div>
+
+    </div>
+  </div>
+
+  <!-- TAB: PROXY DÂN CƯ (RESIDENTIAL PROXY) -->
+  <div class="tab-pane" id="tab-residential">
+    <div class="dashboard-grid">
+
+      <!-- Active Egress Control Card (col-12) -->
+      <div class="card col-12">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px;">
+          <div>
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 6px;">
+              <h3 style="font-size: 18px; font-weight: 700; margin: 0;">🏡 Quản Lý Kết Nối Proxy Dân Cư (Residential / Clean ISP IP)</h3>
+              <span id="resActiveBadge" class="badge-status active">● Đang dùng WARP</span>
+            </div>
+            <p style="font-size: 13px; color: var(--text-muted); margin: 0;">
+              Kết nối đến máy chủ Proxy Dân Cư (IP sạch, băng thông cao, không bị chặn CAPTCHA) để tăng tốc tải mã nguồn, build container hoặc crawl dữ liệu.
+            </p>
+          </div>
+          <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+            <button onclick="applyResidentialProxy('all')" class="btn btn-primary btn-sm" id="btnActivateResidential" title="Chuyển toàn bộ Docker và Git sang dùng Proxy Dân Cư">
+              ⚡ Kích Hoạt Proxy Dân Cư (Docker + Git)
+            </button>
+            <button onclick="switchBackToWarp()" class="btn btn-secondary btn-sm" id="btnSwitchToWarp" title="Khôi phục lại Cloudflare WARP Anycast">
+              🛡️ Khôi Phục Về Cloudflare WARP
+            </button>
+          </div>
+        </div>
+
+        <!-- Quick Summary Row -->
+        <div class="stats-row" style="grid-template-columns: repeat(4, 1fr); margin-top: 18px;">
+          <div class="stat-box">
+            <div class="stat-label">Nguồn Egress Hoạt Động</div>
+            <div id="resCurrentEgress" class="stat-value" style="color: var(--accent); font-size: 13px;">Cloudflare WARP Anycast</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">Địa Chỉ Proxy Dân Cư</div>
+            <div id="resMaskedUrl" class="stat-value" style="font-size: 13px;">Chưa cấu hình</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">Nhà Mạng / ISP Egress</div>
+            <div id="resIspValue" class="stat-value" style="font-size: 13px;">--</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">Tốc Độ Đo Gần Nhất</div>
+            <div id="resSpeedValue" class="stat-value" style="font-size: 13px; color: var(--success);">--</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Config Form Card (col-7) -->
+      <div class="card col-7">
+        <h4 style="font-size: 15px; font-weight: 700; margin-bottom: 6px;">⚙️ Thông Tin Kết Nối Proxy Dân Cư</h4>
+        <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 14px;">
+          Hỗ trợ nhập trực tiếp hoặc dán chuỗi proxy từ các nhà cung cấp (BrightData, Oxylabs, Smartproxy, Webshare, IPRoyal, Proxy-Seller,...).
+        </p>
+
+        <!-- Quick Auto-Parse Box -->
+        <div style="background: rgba(0, 0, 0, 0.3); border: 1px dashed rgba(255, 255, 255, 0.15); border-radius: 10px; padding: 12px; margin-bottom: 16px;">
+          <label style="font-size: 12px; font-weight: 600; color: var(--accent); display: block; margin-bottom: 6px;">
+            📋 Nhập nhanh chuỗi Proxy (Tự động bóc tách):
+          </label>
+          <div style="display: flex; gap: 8px;">
+            <input type="text" id="resQuickInput" class="input-style" placeholder="VD: 103.186.x.x:8080:username:password hoặc user:pass@host:port" style="font-family: 'JetBrains Mono', monospace; font-size: 12px;" />
+            <button type="button" onclick="autoParseProxyInput()" class="btn btn-primary btn-sm" style="white-space: nowrap;">
+              ⚡ Phân Tích
+            </button>
+          </div>
+          <div style="font-size: 11px; color: var(--text-muted); margin-top: 5px;">
+            Hỗ trợ định dạng: <code>IP:PORT:USER:PASS</code>, <code>USER:PASS@HOST:PORT</code>, hoặc URL <code>socks5://...</code>
+          </div>
+        </div>
+
+        <!-- Detail Form -->
+        <div style="display: grid; grid-template-columns: 1fr 2fr 1fr; gap: 10px; margin-bottom: 12px;">
+          <div>
+            <label style="font-size: 12px; color: var(--text-muted); display: block; margin-bottom: 4px;">Giao thức</label>
+            <select id="resProto" class="select-style">
+              <option value="socks5">SOCKS5 (Khuyên dùng)</option>
+              <option value="http">HTTP</option>
+              <option value="https">HTTPS</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size: 12px; color: var(--text-muted); display: block; margin-bottom: 4px;">Host / IP Máy Chủ Proxy</label>
+            <input type="text" id="resHost" class="input-style" placeholder="VD: res.proxyprovider.com hoặc 103.x.x.x" style="font-family: 'JetBrains Mono';" />
+          </div>
+          <div>
+            <label style="font-size: 12px; color: var(--text-muted); display: block; margin-bottom: 4px;">Port</label>
+            <input type="number" id="resPort" class="input-style" placeholder="1080" value="1080" style="font-family: 'JetBrains Mono';" />
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px;">
+          <div>
+            <label style="font-size: 12px; color: var(--text-muted); display: block; margin-bottom: 4px;">Tài khoản (Username - Tùy chọn)</label>
+            <input type="text" id="resUser" class="input-style" placeholder="Để trống nếu IP Whitelist" />
+          </div>
+          <div>
+            <label style="font-size: 12px; color: var(--text-muted); display: block; margin-bottom: 4px;">Mật khẩu (Password - Tùy chọn)</label>
+            <input type="password" id="resPass" class="input-style" placeholder="Nhập mật khẩu proxy" />
+          </div>
+        </div>
+
+        <!-- NO_PROXY Input -->
+        <div style="margin-bottom: 16px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+            <label style="font-size: 12px; color: var(--text-muted);">Danh sách NO_PROXY (Không qua proxy dân cư):</label>
+            <div class="quick-chips" style="margin-top:0;">
+              <button type="button" class="chip-btn" onclick="document.getElementById('resNoProxy').value='localhost,127.0.0.1,docker.io,*.docker.io,*.docker.com,production.cloudflare.docker.com,103.186.100.0/23,192.168.200.0/24';">Khuyên dùng</button>
+              <button type="button" class="chip-btn" onclick="document.getElementById('resNoProxy').value='localhost,127.0.0.1';">Tối thiểu</button>
+            </div>
+          </div>
+          <input type="text" id="resNoProxy" class="input-style" value="localhost,127.0.0.1,docker.io,*.docker.io,*.docker.com,production.cloudflare.docker.com,103.186.100.0/23,192.168.200.0/24" style="font-family: 'JetBrains Mono'; font-size: 11px;" />
+        </div>
+
+        <!-- Form Buttons -->
+        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+          <button onclick="saveResidentialProxy()" class="btn btn-primary btn-sm" id="btnSaveResProxy">
+            💾 Lưu Cấu Hình
+          </button>
+          <button onclick="testResidentialProxy()" class="btn btn-secondary btn-sm" id="btnTestResProxy">
+            <span id="resTestSpinner" style="display: none;">⏳</span> <span>🔍 Kiểm Tra Kết Nối & Đo Tốc Độ</span>
+          </button>
+          <button onclick="applyResidentialProxy('docker')" class="btn btn-secondary btn-sm" title="Chỉ áp dụng riêng cho Docker Daemon">
+            🐳 Áp Dụng Docker
+          </button>
+          <button onclick="applyResidentialProxy('git')" class="btn btn-secondary btn-sm" title="Chỉ áp dụng riêng cho GitHub/GitLab">
+            🐙 Áp Dụng Git
+          </button>
+        </div>
+      </div>
+
+      <!-- Test Result & Diagnostics Card (col-5) -->
+      <div class="card col-5">
+        <h4 style="font-size: 15px; font-weight: 700; margin-bottom: 6px;">📊 Kết Quả Kiểm Tra Proxy</h4>
+        <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 14px;">
+          Thông tin Egress IP thực tế, nhà mạng ISP, độ trễ và băng thông tải xuống khi qua proxy dân cư.
+        </p>
+
+        <div id="resTestResultBox" style="background: rgba(0, 0, 0, 0.35); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 16px; min-height: 220px; display: flex; flex-direction: column; justify-content: center;">
+          <div id="resTestWaiting" style="text-align: center; color: var(--text-muted); font-size: 13px;">
+            <div style="font-size: 32px; margin-bottom: 8px;">🏡</div>
+            Nhấn <strong>"🔍 Kiểm Tra Kết Nối & Đo Tốc Độ"</strong> để đo kiểm thông số thực tế của Proxy Dân Cư.
+          </div>
+
+          <div id="resTestDetails" style="display: none;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 8px;">
+              <span style="font-size: 12px; color: var(--text-muted);">Trạng thái kết nối:</span>
+              <span id="resDiagBadge" class="badge-status active">✓ Kết nối thành công</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 12px;">
+              <span style="color: var(--text-muted);">Egress IP Public:</span>
+              <strong id="resDiagIp" style="font-family: 'JetBrains Mono'; color: var(--accent);">--</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 12px;">
+              <span style="color: var(--text-muted);">Nhà mạng (ISP):</span>
+              <strong id="resDiagIsp">--</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 12px;">
+              <span style="color: var(--text-muted);">Vị trí / Quốc gia:</span>
+              <strong id="resDiagLocation">--</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 12px;">
+              <span style="color: var(--text-muted);">Độ trễ TTFB (Ping):</span>
+              <strong id="resDiagLatency" style="font-family: 'JetBrains Mono'; color: #6ee7b7;">-- ms</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.2); padding: 8px 12px; border-radius: 8px;">
+              <span style="font-size: 12px; color: #6ee7b7; font-weight: 600;">Tốc độ tải đo được:</span>
+              <span id="resDiagSpeed" style="font-family: 'JetBrains Mono'; font-size: 16px; font-weight: 800; color: #6ee7b7;">-- MB/s</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick Commands CheatSheet (col-12) -->
+      <div class="card col-12">
+        <h4 style="font-size: 15px; font-weight: 700; margin-bottom: 10px;">📌 Lệnh Dòng Lệnh Nhanh Cho Proxy Dân Cư</h4>
+        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px;">
+          <div>
+            <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 6px;">Lệnh cURL kiểm tra Egress IP qua Proxy Dân Cư:</div>
+            <div class="code-snippet">
+              <code id="resCurlSnippet">curl -x "socks5://user:pass@host:port" https://cloudflare.com/cdn-cgi/trace</code>
+              <button onclick="copyToClipboard(document.getElementById('resCurlSnippet').innerText)" class="btn btn-secondary btn-sm">Copy</button>
+            </div>
+          </div>
+          <div>
+            <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 6px;">Biến môi trường Terminal / CI-CD Pipeline:</div>
+            <div class="code-snippet">
+              <code id="resExportSnippet">export all_proxy="socks5://user:pass@host:port"</code>
+              <button onclick="copyToClipboard(document.getElementById('resExportSnippet').innerText)" class="btn btn-secondary btn-sm">Copy</button>
+            </div>
+          </div>
+        </div>
       </div>
 
     </div>
@@ -1483,6 +1920,9 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     if (tabId === 'docker') {
       fetchDockerStatus();
     }
+    if (tabId === 'residential') {
+      loadResidentialProxy();
+    }
   }
 
   function selectAndRunSpeed(region) {
@@ -1571,6 +2011,11 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     if (curlEl) curlEl.innerText = `curl --socks5-hostname 127.0.0.1:${data.port} https://cloudflare.com/cdn-cgi/trace`;
     const expEl = document.getElementById('quickExportCmd');
     if (expEl) expEl.innerText = `export all_proxy="socks5://127.0.0.1:${data.port}"`;
+
+    // Cập nhật Proxy Dân Cư UI nếu có
+    if (data.residential_proxy) {
+      updateResidentialProxyUI(data.residential_proxy);
+    }
   }
 
   async function toggleWarp() {
@@ -1774,8 +2219,12 @@ RUN echo "Hello from Cloudflare WARP Docker Build!"
     metrics.innerText = `Tag: ${tag} | Bắt đầu...`;
 
     const warpPort = (currentStatus && currentStatus.port) ? currentStatus.port : 40000;
+    const proxySourceEl = document.getElementById('dockerBuildProxySource');
+    const proxySource = proxySourceEl ? proxySourceEl.value : 'warp';
+    const proxySrcText = proxySource === 'residential' ? 'Proxy Dân Cư' : `Cloudflare WARP (socks5://127.0.0.1:${warpPort})`;
+
     consoleBox.innerText = `[Bắt đầu] docker build ${chkNet.checked ? '--network host ' : ''}${chkCache.checked ? '--no-cache ' : ''}-t ${tag} ...\n` +
-      `[Thông số] Inject Proxy: ${chkProxy.checked ? 'BẬT (socks5://127.0.0.1:' + warpPort + ')' : 'TẮT'}\n` +
+      `[Thông số] Nguồn Proxy: ${proxySrcText} | Inject Proxy: ${chkProxy.checked ? 'BẬT' : 'TẮT'}\n` +
       `[Lưu ý] Tiến trình có thể mất từ 5-30 giây tùy theo kích thước base image...\n------------------------------------------------------------\n`;
 
     showToast(`Đang thực hiện docker build image ${tag}...`);
@@ -1787,6 +2236,7 @@ RUN echo "Hello from Cloudflare WARP Docker Build!"
         body: JSON.stringify({
           dockerfile: dockerfile,
           tag: tag,
+          proxy_source: proxySource,
           network_host: chkNet.checked,
           inject_proxy: chkProxy.checked,
           no_cache: chkCache.checked,
@@ -2091,6 +2541,257 @@ RUN echo "Hello from Cloudflare WARP Docker Build!"
     }
   }
 
+  // --- RESIDENTIAL PROXY FUNCTIONS ---
+  async function loadResidentialProxy() {
+    try {
+      const res = await fetch('/api/residential-proxy');
+      if (res.status === 401) { window.location.href = '/login'; return; }
+      const data = await res.json();
+      if (data.success && data.config) {
+        const c = data.config;
+        if (c.proto) document.getElementById('resProto').value = c.proto;
+        if (c.host) document.getElementById('resHost').value = c.host;
+        if (c.port) document.getElementById('resPort').value = c.port;
+        if (c.username) document.getElementById('resUser').value = c.username;
+        if (c.has_password) {
+          document.getElementById('resPass').placeholder = '●●●●●● (Đã lưu mật khẩu, nhập mới nếu muốn đổi)';
+        }
+        if (c.no_proxy) document.getElementById('resNoProxy').value = c.no_proxy;
+        updateResidentialProxyUI(c);
+      }
+    } catch (e) {
+      console.error('Lỗi tải cấu hình proxy dân cư:', e);
+    }
+  }
+
+  function updateResidentialProxyUI(resData) {
+    if (!resData) return;
+    const isResActive = (resData.active_source === 'residential') || resData.enabled;
+    const badge = document.getElementById('resActiveBadge');
+    const curEgress = document.getElementById('resCurrentEgress');
+    const maskedUrl = document.getElementById('resMaskedUrl');
+    const ispVal = document.getElementById('resIspValue');
+    const spdVal = document.getElementById('resSpeedValue');
+    const ovBadge = document.getElementById('ovResProxyBadge');
+
+    if (badge) {
+      badge.className = isResActive ? 'badge-status active' : 'badge-status inactive';
+      badge.innerText = isResActive ? '● Đang dùng Proxy Dân Cư' : '○ Đang dùng WARP';
+    }
+    if (curEgress) {
+      curEgress.innerText = isResActive ? '🏡 Proxy Dân Cư (Egress Riêng)' : '🛡️ Cloudflare WARP Anycast';
+      curEgress.style.color = isResActive ? 'var(--accent)' : '#3a7bd5';
+    }
+    if (maskedUrl) {
+      maskedUrl.innerText = resData.proxy_url_masked || (resData.host ? `${resData.proto}://${resData.host}:${resData.port}` : 'Chưa cấu hình');
+    }
+
+    if (resData.last_test) {
+      const lt = resData.last_test;
+      if (ispVal) ispVal.innerText = (lt.isp ? lt.isp : '') + (lt.country ? ` (${lt.country})` : '');
+      if (spdVal) spdVal.innerText = lt.speed_mb_s ? `${lt.speed_mb_s} MB/s` : '--';
+      renderResidentialTestResult(lt);
+    }
+
+    if (ovBadge) {
+      if (isResActive) {
+        ovBadge.className = 'badge-status active';
+        ovBadge.innerText = '● Đang Bật';
+      } else if (resData.configured || resData.host) {
+        ovBadge.className = 'badge-status inactive';
+        ovBadge.innerText = '○ Sẵn sàng';
+      } else {
+        ovBadge.className = 'badge-status inactive';
+        ovBadge.innerText = '○ Chưa cài đặt';
+      }
+    }
+
+    // Snippets
+    const rawMasked = resData.proxy_url_masked || 'socks5://user:pass@host:port';
+    const curlEl = document.getElementById('resCurlSnippet');
+    if (curlEl) curlEl.innerText = `curl -x "${rawMasked}" https://cloudflare.com/cdn-cgi/trace`;
+    const expEl = document.getElementById('resExportSnippet');
+    if (expEl) expEl.innerText = `export all_proxy="${rawMasked}"`;
+  }
+
+  async function autoParseProxyInput() {
+    const raw = document.getElementById('resQuickInput').value.trim();
+    if (!raw) {
+      showToast('Vui lòng dán chuỗi proxy cần phân tích!');
+      return;
+    }
+    showToast('Đang phân tích định dạng proxy...');
+    try {
+      const res = await fetch('/api/residential-proxy/parse', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ raw })
+      });
+      const data = await res.json();
+      if (data.success && data.parsed) {
+        const p = data.parsed;
+        if (p.proto) document.getElementById('resProto').value = p.proto;
+        if (p.host) document.getElementById('resHost').value = p.host;
+        if (p.port) document.getElementById('resPort').value = p.port;
+        if (p.username) document.getElementById('resUser').value = p.username;
+        if (p.password) document.getElementById('resPass').value = p.password;
+        showToast('✓ Đã phân tích và điền tự động thông tin Proxy!');
+      } else {
+        showToast('✕ ' + (data.error || 'Định dạng không hợp lệ!'));
+      }
+    } catch (e) {
+      showToast('Lỗi phân tích: ' + e);
+    }
+  }
+
+  function getResidentialFormConfig() {
+    return {
+      proto: document.getElementById('resProto').value,
+      host: document.getElementById('resHost').value.trim(),
+      port: parseInt(document.getElementById('resPort').value.trim()) || 1080,
+      username: document.getElementById('resUser').value.trim(),
+      password: document.getElementById('resPass').value,
+      no_proxy: document.getElementById('resNoProxy').value.trim()
+    };
+  }
+
+  async function saveResidentialProxy() {
+    const cfg = getResidentialFormConfig();
+    if (!cfg.host) {
+      showToast('Vui lòng nhập Host hoặc IP của Proxy Dân Cư!');
+      return;
+    }
+    const btn = document.getElementById('btnSaveResProxy');
+    btn.disabled = true;
+    showToast('Đang lưu thông tin proxy dân cư...');
+    try {
+      const res = await fetch('/api/residential-proxy/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ config: cfg })
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast('✓ ' + data.message);
+        if (data.config) updateResidentialProxyUI(data.config);
+        setTimeout(fetchStatus, 1000);
+      } else {
+        showToast('✕ Lỗi: ' + (data.error || 'Không thể lưu'));
+      }
+    } catch (e) {
+      showToast('Lỗi lưu cấu hình: ' + e);
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  function renderResidentialTestResult(r) {
+    const box = document.getElementById('resTestDetails');
+    const waiting = document.getElementById('resTestWaiting');
+    if (!box || !r) return;
+
+    if (waiting) waiting.style.display = 'none';
+    box.style.display = 'block';
+
+    const badge = document.getElementById('resDiagBadge');
+    if (badge) {
+      badge.className = r.success ? 'badge-status active' : 'badge-status inactive';
+      badge.innerText = r.success ? '✓ Kết nối thành công' : '✕ Kết nối thất bại';
+      badge.style.color = r.success ? '' : '#ef4444';
+      badge.style.background = r.success ? '' : 'rgba(239, 68, 68, 0.15)';
+    }
+
+    document.getElementById('resDiagIp').innerText = r.ip || '--';
+    document.getElementById('resDiagIsp').innerText = (r.isp || '--') + (r.city ? ` (${r.city})` : '');
+    document.getElementById('resDiagLocation').innerText = (r.country || '--') + (r.colo ? ` [Colo: ${r.colo}]` : '');
+    document.getElementById('resDiagLatency').innerText = (r.latency_ms ? `${r.latency_ms} ms` : '--');
+    document.getElementById('resDiagSpeed').innerText = (r.speed_mb_s ? `${r.speed_mb_s} MB/s` : '--');
+  }
+
+  async function testResidentialProxy() {
+    const cfg = getResidentialFormConfig();
+    const btn = document.getElementById('btnTestResProxy');
+    const spinner = document.getElementById('resTestSpinner');
+    btn.disabled = true;
+    if (spinner) spinner.style.display = 'inline';
+    showToast('Đang kết nối thử nghiệm đến Proxy Dân Cư & đo tốc độ...');
+
+    try {
+      const res = await fetch('/api/residential-proxy/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ config: cfg })
+      });
+      const data = await res.json();
+      if (data.success) {
+        renderResidentialTestResult(data);
+        const ispVal = document.getElementById('resIspValue');
+        const spdVal = document.getElementById('resSpeedValue');
+        if (ispVal) ispVal.innerText = (data.isp || '') + (data.country ? ` (${data.country})` : '');
+        if (spdVal) spdVal.innerText = data.speed_mb_s ? `${data.speed_mb_s} MB/s` : '--';
+        showToast(`✓ Kết nối proxy tốt! Tốc độ: ${data.speed_mb_s} MB/s, Ping: ${data.latency_ms}ms`);
+      } else {
+        const waiting = document.getElementById('resTestWaiting');
+        const box = document.getElementById('resTestDetails');
+        if (waiting) {
+          waiting.style.display = 'block';
+          waiting.innerHTML = `<div style="color: #ef4444; font-size: 28px; margin-bottom: 6px;">✕</div>` +
+            `<div style="color: #ef4444; font-weight: 600; margin-bottom: 4px;">Kết nối thất bại</div>` +
+            `<div style="font-size: 11px; color: var(--text-muted); word-break: break-all;">${data.error || 'Không kết nối được'}</div>`;
+        }
+        if (box) box.style.display = 'none';
+        showToast('✕ Kiểm tra thất bại: ' + (data.error || 'Lỗi kết nối'));
+      }
+    } catch (e) {
+      showToast('Lỗi kiểm tra proxy: ' + e);
+    } finally {
+      btn.disabled = false;
+      if (spinner) spinner.style.display = 'none';
+    }
+  }
+
+  async function applyResidentialProxy(target = 'all') {
+    const targetName = target === 'docker' ? 'Docker' : (target === 'git' ? 'Git CLI' : 'Docker & Git');
+    showToast(`Đang kích hoạt Proxy Dân Cư cho ${targetName}...`);
+    try {
+      const res = await fetch('/api/residential-proxy/apply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ target })
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast('✓ ' + data.message);
+        setTimeout(fetchStatus, 1000);
+        setTimeout(fetchDockerStatus, 1500);
+      } else {
+        showToast('✕ Lỗi: ' + (data.error || 'Không thể kích hoạt'));
+      }
+    } catch (e) {
+      showToast('Lỗi kích hoạt: ' + e);
+    }
+  }
+
+  async function switchBackToWarp() {
+    showToast('Đang khôi phục toàn bộ hệ thống về Cloudflare WARP Anycast...');
+    try {
+      const res = await fetch('/api/residential-proxy/switch-warp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast('✓ ' + data.message);
+        setTimeout(fetchStatus, 1000);
+        setTimeout(fetchDockerStatus, 1500);
+      } else {
+        showToast('✕ Lỗi: ' + (data.error || 'Không thể khôi phục WARP'));
+      }
+    } catch (e) {
+      showToast('Lỗi khôi phục: ' + e);
+    }
+  }
+
   fetchStatus();
   loadLogs();
   setInterval(fetchStatus, 10000);
@@ -2098,13 +2799,14 @@ RUN echo "Hello from Cloudflare WARP Docker Build!"
   // Khôi phục tab từ URL hash nếu có
   function initTabFromHash() {
     const hash = window.location.hash.replace('#', '');
-    if (['overview', 'speedtest', 'routing', 'docker', 'gitlab', 'logs'].includes(hash)) {
+    if (['overview', 'speedtest', 'routing', 'docker', 'residential', 'gitlab', 'logs'].includes(hash)) {
       switchTab(hash);
     }
   }
   window.addEventListener('DOMContentLoaded', () => {
     initTabFromHash();
     loadDockerfileTemplate('alpine');
+    loadResidentialProxy();
     const noProxyInput = document.getElementById('dockerNoProxyInput');
     if (noProxyInput) {
       noProxyInput.addEventListener('input', () => {
@@ -2233,6 +2935,15 @@ class WarpAPIHandler(http.server.BaseHTTPRequestHandler):
             if path == "/api/logs":
                 _, logs, _ = run_cmd("journalctl -u warp-svc -n 40 --no-pager 2>/dev/null", timeout=5)
                 self.send_json({"logs": logs})
+                return
+
+            if path == "/api/residential-proxy":
+                cfg = load_residential_proxy()
+                safe_cfg = dict(cfg)
+                safe_cfg["has_password"] = bool(cfg.get("password"))
+                safe_cfg["password"] = ""
+                safe_cfg["proxy_url_masked"] = get_proxy_url(cfg, hide_password=True)
+                self.send_json({"success": True, "config": safe_cfg})
                 return
 
         self.send_response(404)
@@ -2403,6 +3114,17 @@ Environment="NO_PROXY={no_proxy}"
 
             status = get_warp_status()
             port = status.get("port", 40000)
+            proxy_source = req_data.get("proxy_source", "warp")
+            build_proxy_url = f"socks5://127.0.0.1:{port}"
+            build_no_proxy = "localhost,127.0.0.1,docker.io,*.docker.io,*.docker.com,production.cloudflare.docker.com,103.186.100.0/23,192.168.200.0/24"
+
+            if proxy_source == "residential":
+                res_cfg = load_residential_proxy()
+                res_url = get_proxy_url(res_cfg, hide_password=False)
+                if res_url:
+                    build_proxy_url = res_url
+                    if res_cfg.get("no_proxy"):
+                        build_no_proxy = res_cfg.get("no_proxy")
 
             t0 = time.time()
             try:
@@ -2418,9 +3140,14 @@ Environment="NO_PROXY={no_proxy}"
                         cmd += ["--no-cache"]
                     if inject_proxy:
                         cmd += [
-                            "--build-arg", f"HTTP_PROXY=socks5://127.0.0.1:{port}",
-                            "--build-arg", f"HTTPS_PROXY=socks5://127.0.0.1:{port}",
-                            "--build-arg", f"ALL_PROXY=socks5://127.0.0.1:{port}"
+                            "--build-arg", f"HTTP_PROXY={build_proxy_url}",
+                            "--build-arg", f"HTTPS_PROXY={build_proxy_url}",
+                            "--build-arg", f"ALL_PROXY={build_proxy_url}",
+                            "--build-arg", f"http_proxy={build_proxy_url}",
+                            "--build-arg", f"https_proxy={build_proxy_url}",
+                            "--build-arg", f"all_proxy={build_proxy_url}",
+                            "--build-arg", f"NO_PROXY={build_no_proxy}",
+                            "--build-arg", f"no_proxy={build_no_proxy}"
                         ]
                     cmd += ["-t", tag, tmpdir]
 
@@ -2508,6 +3235,75 @@ Environment="NO_PROXY={no_proxy}"
                 else:
                     self.send_json({"success": False, "error": "Invalid region"}, code=400)
                 return
+
+        # API Quản lý Proxy Dân Cư (Residential Proxy)
+        if path == "/api/residential-proxy/parse":
+            raw = req_data.get("raw", "").strip()
+            parsed = parse_proxy_string(raw)
+            if parsed:
+                self.send_json({"success": True, "parsed": parsed})
+            else:
+                self.send_json({"success": False, "error": "Không thể nhận diện định dạng proxy. Vui lòng nhập: ip:port:user:pass, user:pass@host:port, hoặc host:port"}, code=400)
+            return
+
+        if path == "/api/residential-proxy/save":
+            cfg = req_data.get("config", {})
+            save_residential_proxy(cfg)
+            saved = load_residential_proxy()
+            safe_cfg = dict(saved)
+            safe_cfg["has_password"] = bool(saved.get("password"))
+            safe_cfg["password"] = ""
+            safe_cfg["proxy_url_masked"] = get_proxy_url(saved, hide_password=True)
+            self.send_json({"success": True, "message": "Đã lưu cấu hình Proxy Dân Cư thành công!", "config": safe_cfg})
+            return
+
+        if path == "/api/residential-proxy/test":
+            cfg = req_data.get("config")
+            if not cfg or not cfg.get("host"):
+                cfg = load_residential_proxy()
+            else:
+                if not cfg.get("password"):
+                    saved = load_residential_proxy()
+                    cfg["password"] = saved.get("password", "")
+            res = test_residential_proxy(cfg)
+            if res.get("success"):
+                saved = load_residential_proxy()
+                saved["last_test"] = res
+                save_residential_proxy(saved)
+            self.send_json(res)
+            return
+
+        if path == "/api/residential-proxy/apply":
+            target = req_data.get("target", "all")
+            saved = load_residential_proxy()
+            proxy_url = get_proxy_url(saved, hide_password=False)
+            if not proxy_url:
+                self.send_json({"success": False, "error": "Chưa cấu hình host hoặc port của Proxy Dân Cư!"}, code=400)
+                return
+            no_proxy = saved.get("no_proxy", "")
+            if target in ("all", "docker"):
+                apply_proxy_to_docker(proxy_url, no_proxy)
+            if target in ("all", "git"):
+                apply_proxy_to_git(proxy_url)
+            saved["active_source"] = "residential"
+            saved["enabled"] = True
+            save_residential_proxy(saved)
+            self.send_json({
+                "success": True,
+                "message": f"Đã áp dụng Proxy Dân Cư thành công cho {target.upper()}!",
+                "active_source": "residential",
+                "proxy_url_masked": get_proxy_url(saved, hide_password=True)
+            })
+            return
+
+        if path == "/api/residential-proxy/switch-warp":
+            restore_warp_proxy()
+            self.send_json({
+                "success": True,
+                "message": "Đã khôi phục toàn bộ hệ thống (Docker + Git) về Cloudflare WARP Anycast!",
+                "active_source": "warp"
+            })
+            return
 
         self.send_response(404)
         self.end_headers()

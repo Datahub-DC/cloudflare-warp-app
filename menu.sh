@@ -78,6 +78,18 @@ header() {
     fi
 
     echo -e "  Tích hợp    : Docker [${docker_st}] | GitHub [${github_st}] | GitLab [${gitlab_st}]"
+
+    local egress_st="${BLUE}Cloudflare WARP Anycast${NC}"
+    if [ -f /root/linux-cloudflare-warp/.residential_proxy.json ]; then
+        local is_res
+        is_res=$(python3 -c "import json; d=json.load(open('/root/linux-cloudflare-warp/.residential_proxy.json')); print('1' if d.get('active_source')=='residential' or d.get('enabled') else '0')" 2>/dev/null)
+        if [ "$is_res" = "1" ]; then
+            local res_host
+            res_host=$(python3 -c "import json; d=json.load(open('/root/linux-cloudflare-warp/.residential_proxy.json')); print(f\"{d.get('proto','socks5')}://{d.get('host','')}:{d.get('port','')}\")" 2>/dev/null)
+            egress_st="${GREEN}🏡 Proxy Dân Cư [${res_host}]${NC}"
+        fi
+    fi
+    echo -e "  Nguồn Egress: ${egress_st}"
     echo -e "${CYAN}──────────────────────────────────────────────────────────────────────${NC}"
 }
 
@@ -349,6 +361,252 @@ change_dashboard_password() {
     echo -e "${GREEN}Đã cập nhật mật khẩu Web Dashboard thành công!${NC}"
 }
 
+residential_proxy_menu() {
+    local script_dir
+    script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+
+    while true; do
+        clear_screen
+        echo -e "${CYAN}╔══════════════════════════════════════════════════════════════════════╗${NC}"
+        echo -e "${CYAN}║${NC}   ${BOLD}${YELLOW}QUẢN LÝ & CẤU HÌNH PROXY DÂN CƯ (RESIDENTIAL PROXY)${NC}                ${CYAN}║${NC}"
+        echo -e "${CYAN}╚══════════════════════════════════════════════════════════════════════╝${NC}"
+
+        # Đọc thông tin proxy hiện tại
+        local current_info
+        current_info=$(python3 -c "
+import json, os
+f = '/root/linux-cloudflare-warp/.residential_proxy.json'
+if os.path.exists(f):
+    try:
+        d = json.load(open(f))
+        proto = d.get('proto', 'socks5')
+        host = d.get('host', '')
+        port = d.get('port', 1080)
+        user = d.get('username', '')
+        active = d.get('active_source', 'warp')
+        pwd = '******' if d.get('password') else ''
+        url = f'{proto}://{user}:{pwd}@{host}:{port}' if user else f'{proto}://{host}:{port}'
+        print(f'{active}|{url if host else \"Chưa cấu hình\"}')
+    except:
+        print('warp|Chưa cấu hình')
+else:
+    print('warp|Chưa cấu hình')
+" 2>/dev/null)
+
+        local active_src
+        active_src=$(echo "$current_info" | cut -d'|' -f1)
+        local proxy_url_display
+        proxy_url_display=$(echo "$current_info" | cut -d'|' -f2)
+
+        if [ "$active_src" = "residential" ]; then
+            echo -e "  Egress hiện tại: ${GREEN}${BOLD}● ĐANG SỬ DỤNG PROXY DÂN CƯ${NC}"
+        else
+            echo -e "  Egress hiện tại: ${BLUE}${BOLD}🛡️ Đang sử dụng Cloudflare WARP Anycast${NC}"
+        fi
+        echo -e "  Địa chỉ Proxy  : ${YELLOW}${proxy_url_display}${NC}"
+        echo -e "${CYAN}──────────────────────────────────────────────────────────────────────${NC}"
+        echo -e "  ${BOLD}[1]${NC} 📋 Nhập nhanh chuỗi Proxy (IP:Port:User:Pass hoặc user:pass@host:port)"
+        echo -e "  ${BOLD}[2]${NC} ✍️  Nhập thủ công chi tiết (Giao thức, Host, Port, User, Pass)"
+        echo -e "  ${BOLD}[3]${NC} 🔍 Kiểm tra kết nối & Đo tốc độ tải (Benchmark & Public IP)"
+        echo -e "  ${BOLD}[4]${NC} ⚡ ${BOLD}${GREEN}Kích hoạt Proxy Dân Cư cho Toàn bộ (Docker Daemon + Git CLI)${NC}"
+        echo -e "  ${BOLD}[5]${NC} 🐳 Chỉ kích hoạt cho riêng Docker Daemon"
+        echo -e "  ${BOLD}[6]${NC} 🐙 Chỉ kích hoạt cho riêng Git CLI (GitHub & GitLab)"
+        echo -e "  ${BOLD}[7]${NC} 🛡️  ${BOLD}${BLUE}Khôi phục hệ thống về Cloudflare WARP Anycast${NC}"
+        echo -e "  ${BOLD}[0]${NC} Quay lại Menu chính"
+        echo -e "${CYAN}──────────────────────────────────────────────────────────────────────${NC}"
+        read -rp "Chọn thao tác [0-7]: " res_choice
+
+        case "$res_choice" in
+            1)
+                echo ""
+                echo -e "${CYAN}Nhập chuỗi proxy từ nhà cung cấp (VD: 103.186.x.x:8080:username:password):${NC}"
+                read -rp "Dán chuỗi Proxy: " raw_str
+                if [ -n "$raw_str" ]; then
+                    local parse_res
+                    parse_res=$(python3 -c "
+import sys
+sys.path.insert(0, '${script_dir}')
+from web_dashboard import parse_proxy_string, save_residential_proxy, get_proxy_url
+p = parse_proxy_string('''$raw_str''')
+if p:
+    save_residential_proxy(p)
+    print('OK|' + get_proxy_url(p, hide_password=True))
+else:
+    print('ERR|Định dạng không hợp lệ!')
+" 2>/dev/null)
+                    if echo "$parse_res" | grep -q "^OK|"; then
+                        local masked_u
+                        masked_u=$(echo "$parse_res" | cut -d'|' -f2-)
+                        echo -e "${GREEN}✓ Đã phân tích và lưu cấu hình thành công: ${YELLOW}${masked_u}${NC}"
+                    else
+                        echo -e "${RED}[LỖI] Không thể phân tích chuỗi proxy! Vui lòng thử nhập thủ công.${NC}"
+                    fi
+                fi
+                pause
+                ;;
+            2)
+                echo ""
+                echo -e "${BOLD}Nhập thông tin kết nối Proxy Dân Cư:${NC}"
+                read -rp "Giao thức [socks5/http/https, mặc định socks5]: " in_proto
+                in_proto=${in_proto:-socks5}
+                read -rp "Host / IP Proxy: " in_host
+                if [ -z "$in_host" ]; then
+                    echo -e "${RED}[LỖI] Host không được để trống!${NC}"
+                    pause
+                    continue
+                fi
+                read -rp "Port [mặc định 1080]: " in_port
+                in_port=${in_port:-1080}
+                read -rp "Username (để trống nếu Whitelist IP): " in_user
+                read -s -rp "Password (để trống nếu Whitelist IP): " in_pass
+                echo ""
+                read -rp "Danh sách NO_PROXY [mặc định giữ nguyên]: " in_noproxy
+                in_noproxy=${in_noproxy:-"localhost,127.0.0.1,docker.io,*.docker.io,*.docker.com,production.cloudflare.docker.com,103.186.100.0/23,192.168.200.0/24"}
+
+                python3 -c "
+import sys
+sys.path.insert(0, '${script_dir}')
+from web_dashboard import save_residential_proxy
+save_residential_proxy({
+    'proto': '''$in_proto''',
+    'host': '''$in_host''',
+    'port': int('''$in_port'''),
+    'username': '''$in_user''',
+    'password': '''$in_pass''',
+    'no_proxy': '''$in_noproxy'''
+})
+print('Saved')
+" 2>/dev/null
+                echo -e "${GREEN}✓ Đã lưu cấu hình proxy thành công!${NC}"
+                pause
+                ;;
+            3)
+                echo ""
+                echo -e "${YELLOW}Đang kiểm tra kết nối đến Proxy Dân Cư & đo tốc độ...${NC}"
+                python3 -c "
+import sys
+sys.path.insert(0, '${script_dir}')
+from web_dashboard import load_residential_proxy, test_residential_proxy, save_residential_proxy
+cfg = load_residential_proxy()
+if not cfg.get('host'):
+    print('ERR: Chưa cấu hình Host cho Proxy Dân Cư!')
+    sys.exit(1)
+res = test_residential_proxy(cfg)
+if res.get('success'):
+    cfg['last_test'] = res
+    save_residential_proxy(cfg)
+    print(f\"SUCCESS|{res.get('ip')}|{res.get('isp')}|{res.get('country')}|{res.get('latency_ms')}|{res.get('speed_mb_s')}\")
+else:
+    print('FAIL|' + str(res.get('error', 'Unknown error')))
+" 2>&1 | while read -r line; do
+                    if echo "$line" | grep -q "^SUCCESS|"; then
+                        local ip isp country latency speed
+                        ip=$(echo "$line" | cut -d'|' -f2)
+                        isp=$(echo "$line" | cut -d'|' -f3)
+                        country=$(echo "$line" | cut -d'|' -f4)
+                        latency=$(echo "$line" | cut -d'|' -f5)
+                        speed=$(echo "$line" | cut -d'|' -f6)
+                        echo -e "${GREEN}✓ Kết nối Proxy Dân Cư thành công!${NC}"
+                        echo -e "  ➜ Egress Public IP : ${CYAN}${BOLD}${ip}${NC}"
+                        echo -e "  ➜ Nhà mạng (ISP)   : ${YELLOW}${isp} (${country})${NC}"
+                        echo -e "  ➜ Độ trễ (TTFB)    : ${MAGENTA}${latency} ms${NC}"
+                        echo -e "  ➜ Tốc độ tải về    : ${GREEN}${BOLD}${speed} MB/s${NC}"
+                    elif echo "$line" | grep -q "^FAIL|"; then
+                        local err
+                        err=$(echo "$line" | cut -d'|' -f2-)
+                        echo -e "${RED}[LỖI KẾT NỐI] ${err}${NC}"
+                    elif echo "$line" | grep -q "^ERR:"; then
+                        echo -e "${RED}$line${NC}"
+                    fi
+                done
+                pause
+                ;;
+            4)
+                echo ""
+                echo -e "${YELLOW}Đang kích hoạt Proxy Dân Cư cho Toàn bộ (Docker Daemon + Git)...${NC}"
+                python3 -c "
+import sys
+sys.path.insert(0, '${script_dir}')
+from web_dashboard import load_residential_proxy, get_proxy_url, apply_proxy_to_docker, apply_proxy_to_git, save_residential_proxy
+cfg = load_residential_proxy()
+url = get_proxy_url(cfg, hide_password=False)
+if not url:
+    print('ERR: Chưa cấu hình proxy!')
+    sys.exit(1)
+apply_proxy_to_docker(url, cfg.get('no_proxy', ''))
+apply_proxy_to_git(url)
+cfg['active_source'] = 'residential'
+cfg['enabled'] = True
+save_residential_proxy(cfg)
+print('OK')
+" 2>/dev/null
+                echo -e "${GREEN}✓ Đã chuyển Docker Daemon và Git CLI sang dùng Proxy Dân Cư thành công!${NC}"
+                pause
+                ;;
+            5)
+                echo ""
+                echo -e "${YELLOW}Đang áp dụng Proxy Dân Cư riêng cho Docker Daemon...${NC}"
+                python3 -c "
+import sys
+sys.path.insert(0, '${script_dir}')
+from web_dashboard import load_residential_proxy, get_proxy_url, apply_proxy_to_docker, save_residential_proxy
+cfg = load_residential_proxy()
+url = get_proxy_url(cfg, hide_password=False)
+if not url:
+    print('ERR: Chưa cấu hình proxy!')
+    sys.exit(1)
+apply_proxy_to_docker(url, cfg.get('no_proxy', ''))
+cfg['active_source'] = 'residential'
+save_residential_proxy(cfg)
+print('OK')
+" 2>/dev/null
+                echo -e "${GREEN}✓ Đã kích hoạt Proxy Dân Cư cho Docker Daemon!${NC}"
+                pause
+                ;;
+            6)
+                echo ""
+                echo -e "${YELLOW}Đang áp dụng Proxy Dân Cư riêng cho Git CLI (github.com & gitlab.com)...${NC}"
+                python3 -c "
+import sys
+sys.path.insert(0, '${script_dir}')
+from web_dashboard import load_residential_proxy, get_proxy_url, apply_proxy_to_git, save_residential_proxy
+cfg = load_residential_proxy()
+url = get_proxy_url(cfg, hide_password=False)
+if not url:
+    print('ERR: Chưa cấu hình proxy!')
+    sys.exit(1)
+apply_proxy_to_git(url)
+cfg['active_source'] = 'residential'
+save_residential_proxy(cfg)
+print('OK')
+" 2>/dev/null
+                echo -e "${GREEN}✓ Đã kích hoạt Proxy Dân Cư cho Git CLI!${NC}"
+                pause
+                ;;
+            7)
+                echo ""
+                echo -e "${YELLOW}Đang khôi phục toàn bộ hệ thống về Cloudflare WARP Anycast...${NC}"
+                python3 -c "
+import sys
+sys.path.insert(0, '${script_dir}')
+from web_dashboard import restore_warp_proxy
+restore_warp_proxy()
+print('OK')
+" 2>/dev/null
+                echo -e "${GREEN}✓ Đã khôi phục Docker và Git về Cloudflare WARP Anycast!${NC}"
+                pause
+                ;;
+            0)
+                break
+                ;;
+            *)
+                echo -e "${RED}Lựa chọn không hợp lệ!${NC}"
+                sleep 1
+                ;;
+        esac
+    done
+}
+
 # Vòng lặp Menu chính
 while true; do
     header
@@ -358,14 +616,15 @@ while true; do
     echo -e "  ${BOLD}[4]${NC} ${CYAN}Bật / Tắt Proxy cho Docker Daemon${NC} (kèm NO_PROXY)"
     echo -e "  ${BOLD}[5]${NC} ${BLUE}Bật / Tắt Proxy cho GitHub CLI${NC} (github.com)"
     echo -e "  ${BOLD}[6]${NC} ${MAGENTA}Bật / Tắt Proxy cho GitLab CLI${NC} (gitlab.com)"
-    echo -e "  ${BOLD}[7]${NC} 🦊 ${BOLD}Xem cấu hình tăng tốc GitLab CI/CD & Runner${NC}"
-    echo -e "  ${BOLD}[8]${NC} ⚡ ${BOLD}Đo kiểm tốc độ mạng quốc tế${NC} (Speed Test)"
-    echo -e "  ${BOLD}[9]${NC} 🌐 ${CYAN}Mở Web Dashboard trên trình duyệt${NC} (Port 8888)"
-    echo -e "  ${BOLD}[10]${NC} 🔐 ${YELLOW}Đổi mật khẩu Web Dashboard${NC}"
-    echo -e "  ${BOLD}[11]${NC} 📋 Xem log dịch vụ (warp-svc logs)"
+    echo -e "  ${BOLD}[7]${NC} 🏡 ${BOLD}${GREEN}Cấu hình & Quản lý Proxy Dân Cư${NC} (Residential Proxy)"
+    echo -e "  ${BOLD}[8]${NC} 🦊 ${BOLD}Xem cấu hình tăng tốc GitLab CI/CD & Runner${NC}"
+    echo -e "  ${BOLD}[9]${NC} ⚡ ${BOLD}Đo kiểm tốc độ mạng quốc tế${NC} (Speed Test)"
+    echo -e "  ${BOLD}[10]${NC} 🌐 ${CYAN}Mở Web Dashboard trên trình duyệt${NC} (Port 8888)"
+    echo -e "  ${BOLD}[11]${NC} 🔐 ${YELLOW}Đổi mật khẩu Web Dashboard${NC}"
+    echo -e "  ${BOLD}[12]${NC} 📋 Xem log dịch vụ (warp-svc logs)"
     echo -e "  ${BOLD}[0]${NC} Thoát"
     echo -e "${CYAN}──────────────────────────────────────────────────────────────────────${NC}"
-    read -rp "Chọn thao tác [0-11]: " choice
+    read -rp "Chọn thao tác [0-12]: " choice
 
     case "$choice" in
         1)
@@ -399,21 +658,24 @@ while true; do
             pause
             ;;
         7)
+            residential_proxy_menu
+            ;;
+        8)
             show_gitlab_cicd_guide
             pause
             ;;
-        8)
+        9)
             speed_test_menu
             ;;
-        9)
+        10)
             start_web_dashboard
             pause
             ;;
-        10)
+        11)
             change_dashboard_password
             pause
             ;;
-        11)
+        12)
             journalctl -u warp-svc -n 30 --no-pager
             pause
             ;;

@@ -1,5 +1,6 @@
 # Authentication & Secrets
 .warp_auth.json
+.residential_proxy.json
 
 # Python
 __pycache__/

@@ -2,7 +2,7 @@
 
 Công cụ tự động hóa cài đặt, cấu hình và quản trị **Cloudflare WARP** cho máy chủ Linux (Data Center / VPS / Cloud). Hoàn toàn miễn phí, **an toàn tuyệt đối cho kết nối SSH**, tương thích toàn diện với tất cả các phiên bản Ubuntu từ 20.04 đến 26.04 LTS.
 
-Tích hợp sẵn **Web Dashboard Dark Glassmorphism 6 Tabs** có đăng nhập bảo mật và **Terminal Menu (TUI)** tiện lợi, không cần ghi nhớ các câu lệnh phức tạp.
+Tích hợp sẵn **Web Dashboard Dark Glassmorphism 7 Tabs** có đăng nhập bảo mật, **Quản lý Proxy Dân Cư (Residential Proxy)** và **Terminal Menu (TUI)** tiện lợi, không cần ghi nhớ các câu lệnh phức tạp.
 
 ---
 
@@ -11,14 +11,15 @@ Tích hợp sẵn **Web Dashboard Dark Glassmorphism 6 Tabs** có đăng nhập 
 2. [Nguyên lý An toàn Cốt lõi (Safe for SSH)](#-tính-năng-an-toàn-cốt-lõi-safe-by-default)
 3. [Cài đặt nhanh trong 1 dòng lệnh](#-cài-đặt-nhanh-trong-1-dòng-lệnh)
 4. [Mô hình Định tuyến Thông minh (Smart Routing)](#-mô-hình-định-tuyến-thông-minh-smart-routing)
-5. [Giao diện Trực quan (Web UI & TUI)](#-giao-diện-trực-quan-thay-vì-gõ-lệnh-cli)
-   - [Web Dashboard 6 Tabs](#1--web-dashboard-hiện-đại--bảo-mật-trên-trình-duyệt)
+5. [🏡 Quản Lý & Tích Hợp Proxy Dân Cư (Residential Proxy)](#-quản-lý--tích-hợp-proxy-dân-cư-residential-proxy)
+6. [Giao diện Trực quan (Web UI & TUI)](#-giao-diện-trực-quan-thay-vì-gõ-lệnh-cli)
+   - [Web Dashboard 7 Tabs](#1--web-dashboard-hiện-đại--bảo-mật-trên-trình-duyệt)
    - [Terminal Interactive Menu](#2--terminal-interactive-menu-tui-trong-ssh)
-6. [Tăng tốc GitLab CI/CD & Runner](#-tăng-tốc-gitlab-cicd-pipeline--gitlab-runner)
-7. [Hướng dẫn Sử dụng CLI](#-hướng-dẫn-sử-dụng-sau-khi-cài-đặt)
-8. [Các Lệnh Quản trị Nhanh](#-các-lệnh-quản-lý-tiện-ích)
-9. [Bảo mật & Quản lý Mật khẩu](#-bảo-mật--quản-lý-mật-khẩu-web-ui)
-10. [Tài liệu Chi tiết](#-tài-liệu-chi-tiết)
+7. [Tăng tốc GitLab CI/CD & Runner](#-tăng-tốc-gitlab-cicd-pipeline--gitlab-runner)
+8. [Hướng dẫn Sử dụng CLI](#-hướng-dẫn-sử-dụng-sau-khi-cài-đặt)
+9. [Các Lệnh Quản trị Nhanh](#-các-lệnh-quản-lý-tiện-ích)
+10. [Bảo mật & Quản lý Mật khẩu](#-bảo-mật--quản-lý-mật-khẩu-web-ui)
+11. [Tài liệu Chi tiết](#-tài-liệu-chi-tiết)
 
 ---
 
@@ -79,6 +80,19 @@ Hệ thống cho phép định tuyến chọn lọc từng dịch vụ đi qua W
 
 ---
 
+## 🏡 Quản Lý & Tích Hợp Proxy Dân Cư (Residential Proxy)
+
+Bên cạnh Cloudflare WARP Anycast miễn phí, hệ thống hiện hỗ trợ **kết nối trực tiếp đến các nhà cung cấp Proxy Dân Cư (Clean Residential / ISP Private IP)** như BrightData, Oxylabs, Smartproxy, Webshare, IPRoyal, Proxy-Seller,...
+
+### 🌟 Ưu Điểm Vượt Trội Của Proxy Dân Cư:
+* **Tốc độ tải xuống vượt trội:** Băng thông cao, không bị bóp nghẽn hoặc giới hạn tải đồng thời.
+* **IP Dân Cư Sạch (Clean Residential ISP):** Không bị nhận diện là Datacenter IP, hoàn toàn không bị chặn CAPTCHA khi kéo code từ GitHub, GitLab hoặc cào dữ liệu (crawling).
+* **Bóc tách tự động thông minh (Smart Auto-Parser):** Chỉ cần dán chuỗi proxy thô dạng `ip:port:user:pass`, `user:pass@host:port` hoặc `socks5://...`, hệ thống sẽ tự động phân tích và điền vào form.
+* **Đo kiểm chất lượng thời gian thực (Live Diagnostic & Benchmark):** Tự động đo độ trễ TTFB (ping ms), băng thông tải thực tế (MB/s), truy vấn IP Public và nhà mạng (ISP/ASN).
+* **Chuyển đổi 1-Click (Egress Switcher):** Dễ dàng chuyển hướng toàn bộ Docker Daemon và Git CLI giữa **Cloudflare WARP Anycast** và **Proxy Dân Cư** mà không cần khởi động lại máy chủ.
+
+---
+
 ## 🖥️ Giao Diện Trực Quan Thay Vì Gõ Lệnh CLI
 
 Để người dùng không cần phải ghi nhớ các câu lệnh phức tạp, công cụ hỗ trợ **2 loại giao diện trực quan**:
@@ -97,11 +111,11 @@ sudo bash install.sh --dashboard-service
 ```
 *Truy cập trình duyệt tại:* **`http://<IP_MAY_CHU>:8888`** *(Hoặc `http://127.0.0.1:8888`)*
 
-#### 📑 Cấu trúc 6 Tab Chuyên Biệt & Tiện Lợi:
+#### 📑 Cấu trúc 7 Tab Chuyên Biệt & Tiện Lợi:
 1. 📊 **Tổng quan & Kết nối (`#overview`):**
    * Theo dõi trạng thái Anycast thời gian thực (`status-pulse`), trạm PoP (VD: `SIN - Singapore`), cổng SOCKS5 Local, Egress IP Public.
    * Nút **Bật / Tắt WARP** nhanh với 1 cú click.
-   * Thẻ tóm tắt trạng thái Docker Proxy, Git Proxy kèm lối tắt chuyển tab.
+   * Thẻ tóm tắt 4 dịch vụ: Docker Proxy, Proxy Dân Cư, Git CLI, và Đo Tốc Độ Toàn Cầu kèm lối tắt chuyển tab.
    * Bảng câu lệnh cURL & Export biến môi trường kèm nút Copy nhanh.
 2. ⚡ **Đo kiểm Tốc độ (`#speedtest`):**
    * Kiểm tra băng thông và độ trễ (ping/ms) đến 8 Cloud Data Center toàn cầu: 🇸🇬 Singapore, 🇯🇵 Tokyo, 🇩🇪 Đức Falkenstein & Nuremberg, 🇺🇸 Mỹ Ashburn & Hillsboro, 🇬🇧 Anh London, 🇫🇮 Phần Lan.
@@ -113,7 +127,13 @@ sudo bash install.sh --dashboard-service
    * Công tắc tăng tốc riêng cho **GitLab CLI** (`gitlab.com`).
    * Ô đổi cổng SOCKS5 Proxy trực tiếp (1024 - 65535).
    * Hướng dẫn cấu hình Privoxy chuyển đổi HTTP Proxy sang SOCKS5.
-4. 🐳 **Docker Daemon Proxy & Build Console (`#docker`):**
+4. 🏡 **Proxy Dân Cư (`#residential`):**
+   * Thanh điều khiển nguồn Egress hoạt động (Chuyển đổi 1-click giữa WARP và Proxy Dân Cư).
+   * Hộp nhập nhanh chuỗi proxy với tính năng bóc tách tự động (`IP:PORT:USER:PASS`).
+   * Cấu hình chi tiết giao thức SOCKS5 / HTTP / HTTPS, host, port, xác thực và `NO_PROXY`.
+   * Thẻ chẩn đoán trực tiếp: Egress IP, ISP nhà mạng, quốc gia, độ trễ TTFB và tốc độ tải thực tế (MB/s).
+   * Lệnh cURL & biến môi trường export mẫu cho terminal / CI-CD pipeline.
+5. 🐳 **Docker Daemon Proxy & Build Console (`#docker`):**
    * **Quản lý Proxy Docker Daemon & Systemd:**
      - Xem trực quan trạng thái daemon (`docker info`), phiên bản Docker, địa chỉ Proxy, trạng thái file cấu hình systemd.
      - Tùy chỉnh danh sách `NO_PROXY` trực tiếp với các Preset 1-click: *Khuyên dùng (Docker Hub + Mạng nội bộ)*, *Toàn bộ qua WARP*, *Kubernetes / Internal LAN*.
@@ -121,21 +141,22 @@ sudo bash install.sh --dashboard-service
      - Nút **🛑 Tắt Proxy Docker** để khôi phục mặc định.
    * **Trình Thực Thi Lệnh Docker Build Trực Tiếp:**
      - Tích hợp sẵn các mẫu Dockerfile phổ biến: 🏔️ *Alpine + cURL*, 🐍 *Python + Pip Packages*, 🟩 *Node.js + NPM Express*, 🐙 *Git Clone Repo*, ✏️ *Custom Dockerfile*.
+     - Chọn nguồn proxy build: **Cloudflare WARP** hoặc **Proxy Dân Cư (Residential)**.
      - Tùy chỉnh Tag Name Image (VD: `warp-build-test:latest`).
-     - Tùy chọn build nâng cao: Tự động inject `--build-arg HTTP_PROXY=socks5://127.0.0.1:40000`, `--network host` (bắt buộc để kết nối SOCKS5 host), `--no-cache`, và tự động dọn dẹp image.
+     - Tùy chọn build nâng cao: Tự động inject `--build-arg HTTP_PROXY=...`, `--network host`, `--no-cache`, và tự động dọn dẹp image.
      - Hộp hiển thị Live Terminal Console với BuildKit logs chi tiết, mã thoát (Exit Code), thời gian đo kiểm thực tế (giây).
      - Nút **🗑️ Dọn Image** để giải phóng dung lượng đĩa và nút **🧹 Xóa Console**.
-5. 🦊 **GitLab CI/CD (`#gitlab`):**
+6. 🦊 **GitLab CI/CD (`#gitlab`):**
    * Cấu hình sẵn khối biến môi trường cho `.gitlab-ci.yml` (kèm nút Copy).
    * Cấu hình mẫu cho `/etc/gitlab-runner/config.toml` với `network_mode = "host"` (kèm nút Copy).
    * Liên kết trực tiếp tới file mẫu `gitlab-ci.example.yml` và `gitlab-runner.example.toml`.
-6. 📋 **Nhật ký & Chẩn đoán (`#logs`):**
+7. 📋 **Nhật ký & Chẩn đoán (`#logs`):**
    * Xem trực tiếp log dịch vụ `warp-svc` theo thời gian thực trên giao diện terminal.
    * Hỗ trợ checkbox **Tự động làm mới (5s)** và nút làm mới thủ công.
 
 #### 🔐 Tính năng Bảo Mật Toàn Diện:
 * **Trang Đăng Nhập Glassmorphism Dark Mode:** Tự động chặn và chuyển hướng mọi truy cập trái phép về `/login`.
-* **Mã hóa Mật khẩu SHA-256 + 16-byte Random Salt:** Không lưu plain-text mật khẩu. File cấu hình `.warp_auth.json` được phân quyền an toàn `chmod 600`.
+* **Mã hóa Mật khẩu SHA-256 + 16-byte Random Salt:** Không lưu plain-text mật khẩu. File cấu hình `.warp_auth.json` và `.residential_proxy.json` được phân quyền an toàn `chmod 600`.
 * **Chống Brute-Force Rate Limiting:** Tự động khóa IP 5 phút nếu nhập sai quá 5 lần liên tiếp (Mã lỗi 429).
 * **Quản lý Phiên An toàn:** Sử dụng Session Cookie ngẫu nhiên 64-hex với cờ `HttpOnly` (chống XSS) và `SameSite=Lax` (chống CSRF).
 * **Tiêu đề HTTP Security:** Tự động gắn `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`.
@@ -161,7 +182,8 @@ sudo bash install.sh --menu
   Trạng thái  : ● ĐANG KẾT NỐI (Connected)
   Chế độ      : SOCKS5 Proxy (An toàn tuyệt đối cho SSH)
   Cổng Proxy  : 127.0.0.1:40000
-  Tích hợp    : Docker [Bật (kèm NO_PROXY)] | Git [Bật] | GitLab [Bật]
+  Tích hợp    : Docker [Bật (kèm NO_PROXY)] | GitHub [Bật] | GitLab [Bật]
+  Nguồn Egress: Cloudflare WARP Anycast (hoặc 🏡 Proxy Dân Cư)
 ──────────────────────────────────────────────────────────────────────
   [1] Bật kết nối WARP (Connect)
   [2] Tạm ngắt kết nối WARP (Disconnect)
@@ -169,11 +191,12 @@ sudo bash install.sh --menu
   [4] Bật / Tắt Proxy cho Docker Daemon (kèm NO_PROXY)
   [5] Bật / Tắt Proxy cho GitHub CLI (github.com)
   [6] Bật / Tắt Proxy cho GitLab CLI (gitlab.com)
-  [7] 🦊 Xem cấu hình tăng tốc GitLab CI/CD & Runner
-  [8] ⚡ Đo kiểm tốc độ mạng quốc tế (Speed Test)
-  [9] 🌐 Mở Web Dashboard trên trình duyệt (Port 8888)
-  [10] 🔐 Đổi mật khẩu Web Dashboard
-  [11] 📋 Xem log dịch vụ (warp-svc logs)
+  [7] 🏡 Cấu hình & Quản lý Proxy Dân Cư (Residential Proxy)
+  [8] 🦊 Xem cấu hình tăng tốc GitLab CI/CD & Runner
+  [9] ⚡ Đo kiểm tốc độ mạng quốc tế (Speed Test)
+  [10] 🌐 Mở Web Dashboard trên trình duyệt (Port 8888)
+  [11] 🔐 Đổi mật khẩu Web Dashboard
+  [12] 📋 Xem log dịch vụ (warp-svc logs)
   [0] Thoát
 ```
 
