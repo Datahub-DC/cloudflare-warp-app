@@ -1,6 +1,24 @@
-# Linux Cloudflare WARP Installer (SOCKS5 Proxy Mode)
+# ⚡ Linux Cloudflare WARP App (SOCKS5 Proxy & Web Control Center)
 
-Công cụ tự động hóa cài đặt và cấu hình **Cloudflare WARP** cho máy chủ Linux (Data Center / VPS) hoàn toàn miễn phí, an toàn tuyệt đối cho kết nối SSH, tương thích toàn diện với các phiên bản Ubuntu.
+Công cụ tự động hóa cài đặt, cấu hình và quản trị **Cloudflare WARP** cho máy chủ Linux (Data Center / VPS / Cloud). Hoàn toàn miễn phí, **an toàn tuyệt đối cho kết nối SSH**, tương thích toàn diện với tất cả các phiên bản Ubuntu từ 20.04 đến 26.04 LTS.
+
+Tích hợp sẵn **Web Dashboard Dark Glassmorphism 5 Tabs** có đăng nhập bảo mật và **Terminal Menu (TUI)** tiện lợi, không cần ghi nhớ các câu lệnh phức tạp.
+
+---
+
+## 📑 Mục lục
+1. [Hỗ trợ Hệ điều hành](#-hỗ-trợ-các-phiên-bản-hệ-điều-hành)
+2. [Nguyên lý An toàn Cốt lõi (Safe for SSH)](#-tính-năng-an-toàn-cốt-lõi-safe-by-default)
+3. [Cài đặt nhanh trong 1 dòng lệnh](#-cài-đặt-nhanh-trong-1-dòng-lệnh)
+4. [Mô hình Định tuyến Thông minh (Smart Routing)](#-mô-hình-định-tuyến-thông-minh-smart-routing)
+5. [Giao diện Trực quan (Web UI & TUI)](#-giao-diện-trực-quan-thay-vì-gõ-lệnh-cli)
+   - [Web Dashboard 5 Tabs](#1--web-dashboard-hiện-đại--bảo-mật-trên-trình-duyệt)
+   - [Terminal Interactive Menu](#2--terminal-interactive-menu-tui-trong-ssh)
+6. [Tăng tốc GitLab CI/CD & Runner](#-tăng-tốc-gitlab-cicd-pipeline--gitlab-runner)
+7. [Hướng dẫn Sử dụng CLI](#-hướng-dẫn-sử-dụng-sau-khi-cài-đặt)
+8. [Các Lệnh Quản trị Nhanh](#-các-lệnh-quản-lý-tiện-ích)
+9. [Bảo mật & Quản lý Mật khẩu](#-bảo-mật--quản-lý-mật-khẩu-web-ui)
+10. [Tài liệu Chi tiết](#-tài-liệu-chi-tiết)
 
 ---
 
@@ -17,13 +35,13 @@ Công cụ tự động hóa cài đặt và cấu hình **Cloudflare WARP** cho
 > [!CAUTION]
 > **KHÔNG BAO GIỜ BỊ MẤT KẾT NỐI SSH:**  
 > Mặc định chế độ Full Tunnel (VPN Card mạng ảo) của WARP sẽ ghi đè Default Gateway và làm ngắt kết nối SSH vào IP Public của máy chủ ngay lập tức.  
-> Script này **bắt buộc chạy ở chế độ SOCKS5 Proxy (`127.0.0.1:40000`)**, tuyệt đối không can thiệp vào bảng định tuyến (Routing Table) của hệ điều hành. Toàn bộ lưu lượng SSH, Web Server, DB hiện có vẫn hoạt động 100% bình thường.
+> Script này **bắt buộc chạy ở chế độ SOCKS5 Proxy (`127.0.0.1:40000`)**, tuyệt đối không can thiệp vào bảng định tuyến (Routing Table) của hệ điều hành. Toàn bộ lưu lượng SSH, Web Server, Database hiện có vẫn hoạt động 100% bình thường.
 
 ---
 
 ## 🛠️ Cài đặt nhanh trong 1 dòng lệnh
 
-### Cách 1: Clone repo và chạy cài đặt
+### Cách 1: Clone repo và chạy cài đặt (Khuyên dùng)
 ```bash
 git clone https://github.com/Datahub-DC/cloudflare-warp-app.git
 cd cloudflare-warp-app
@@ -40,86 +58,23 @@ curl -fsSL https://raw.githubusercontent.com/Datahub-DC/cloudflare-warp-app/main
 ## ⚡ Các tính năng tự động của Script
 
 1. **Tự động nhận diện bản phân phối:** Tự động phát hiện Codename (`focal`, `jammy`, `noble`, `resolute`) để chọn đúng kho APT Cloudflare chính thức.
-2. **Khắc phục tường lửa Data Center (Chặn Port 80 Outbound):** Tự động phát hiện nếu cổng 80 ra ngoài bị chặn và tự động chuyển đổi kho lưu trữ APT sang **HTTPS** (`https://archive.ubuntu.com/`).
+2. **Khắc phục tường lửa Data Center (Chặn Port 80 Outbound):** Tự động phát hiện nếu cổng 80 ra ngoài bị chặn và chuyển đổi kho APT sang **HTTPS** (`https://archive.ubuntu.com/`).
 3. **Cài đặt & Kích hoạt:** Tự động thêm GPG key, repository và cài đặt `cloudflare-warp`.
 4. **Cấu hình SOCKS5 Proxy:** Thiết lập cổng `127.0.0.1:40000`, kích hoạt kết nối và chạy kiểm tra định tuyến tự động (`warp=on`).
 
 ---
 
-## 📖 Hướng dẫn sử dụng sau khi cài đặt
+## 🔀 Mô hình Định tuyến Thông minh (Smart Routing)
 
-### 1. Tăng tốc Git CLI (Chỉ cho GitHub/GitLab quốc tế)
-```bash
-# Chỉ riêng GitHub đi qua WARP SOCKS5:
-git config --global http."https://github.com/".proxy "socks5://127.0.0.1:40000"
+Hệ thống cho phép định tuyến chọn lọc từng dịch vụ đi qua WARP mà không làm chậm máy chủ:
 
-# Chỉ riêng GitLab đi qua WARP SOCKS5:
-git config --global http."https://gitlab.com/".proxy "socks5://127.0.0.1:40000"
-
-# Khi nào muốn tắt:
-git config --global --unset http."https://github.com/".proxy
-```
-
-### 2. Sử dụng với cURL
-```bash
-curl --socks5-hostname 127.0.0.1:40000 -O https://example.com/file.tar.gz
-```
-
-### 3. Dùng biến môi trường tạm thời cho phiên Terminal / CI-CD
-```bash
-export all_proxy="socks5://127.0.0.1:40000"
-export ALL_PROXY="socks5://127.0.0.1:40000"
-
-# Tắt proxy:
-unset all_proxy ALL_PROXY
-```
-
-### 4. Cấu hình cho Docker Daemon (Khuyên dùng NO_PROXY)
-> [!TIP]
-> Docker Hub kéo trực tiếp qua mạng nội địa thường rất nhanh (~200 Mbps). Nếu cần proxy cho các registry quốc tế khác, cấu hình danh sách `NO_PROXY` để bỏ qua Docker Hub:
-
-Tạo file `/etc/systemd/system/docker.service.d/http-proxy.conf`:
-```ini
-[Service]
-Environment="HTTP_PROXY=socks5://127.0.0.1:40000"
-Environment="HTTPS_PROXY=socks5://127.0.0.1:40000"
-Environment="NO_PROXY=localhost,127.0.0.1,docker.io,*.docker.io,*.docker.com,production.cloudflare.docker.com"
-```
-Khởi động lại Docker:
-```bash
-sudo systemctl daemon-reload && sudo systemctl restart docker
-```
-
-### 5. Tăng tốc GitLab CI/CD Pipeline & GitLab Runner
-Áp dụng cho các máy chủ tự host GitLab Runner đặt tại Data Center để khắc phục tình trạng kéo code từ `gitlab.com` hoặc tải package (NPM, PyPI, Maven, Go) bị chậm:
-
-#### A. Cấu hình cho Runner (`/etc/gitlab-runner/config.toml`):
-> [!IMPORTANT]
-> Nếu Runner sử dụng **Docker Executor**, bắt buộc phải cấu hình `network_mode = "host"` để container job có thể truy cập được SOCKS5 Proxy `127.0.0.1:40000` của máy chủ Host!
-
-```toml
-[[runners]]
-  name = "warp-docker-runner"
-  url = "https://gitlab.com"
-  executor = "docker"
-  environment = [
-    "ALL_PROXY=socks5://127.0.0.1:40000",
-    "NO_PROXY=localhost,127.0.0.1,docker.io,*.docker.com"
-  ]
-  [runners.docker]
-    network_mode = "host"
-```
-*(Xem file mẫu đầy đủ tại [gitlab-runner.example.toml](file:///root/linux-cloudflare-warp/gitlab-runner.example.toml))*
-
-#### B. Cấu hình trong `.gitlab-ci.yml` (Toàn bộ Pipeline):
-```yaml
-variables:
-  ALL_PROXY: "socks5://127.0.0.1:40000"
-  HTTP_PROXY: "socks5://127.0.0.1:40000"
-  HTTPS_PROXY: "socks5://127.0.0.1:40000"
-  NO_PROXY: "localhost,127.0.0.1,docker.io,*.docker.com"
-```
-*(Xem file pipeline mẫu đầy đủ cho Node, Python, Docker tại [gitlab-ci.example.yml](file:///root/linux-cloudflare-warp/gitlab-ci.example.yml))*
+| Dịch vụ | Hướng kết nối | Tốc độ | Lý do |
+| :--- | :--- | :--- | :--- |
+| **SSH / Web / DB** | 🟢 Đi trực tiếp (Direct) | Nguyên bản | Giữ an toàn và phản hồi tức thì cho người quản trị |
+| **Docker Hub** | 🟢 Đi trực tiếp (`NO_PROXY`) | ~200 Mbps | Tải image từ Docker Hub nội địa cực nhanh, không qua VPN |
+| **GitHub CLI** | ⚡ Qua WARP SOCKS5 | Cực nhanh | Khắc phục đứt cáp, tăng tốc `git clone/fetch/push` |
+| **GitLab Quốc tế** | ⚡ Qua WARP SOCKS5 | Cực nhanh | Khắc phục tình trạng treo khi kéo code từ `gitlab.com` |
+| **GitLab CI/CD Runner**| ⚡ Qua WARP SOCKS5 | Tối đa | Tăng tốc tải NPM, PyPI, Maven, Go module và images |
 
 ---
 
@@ -128,19 +83,7 @@ variables:
 Để người dùng không cần phải ghi nhớ các câu lệnh phức tạp, công cụ hỗ trợ **2 loại giao diện trực quan**:
 
 ### 1. 🌐 Web Dashboard Hiện Đại & Bảo Mật (Trên trình duyệt)
-Giao diện Web siêu nhẹ (chạy bằng Python 3 có sẵn, không cần cài đặt thêm bất kỳ thư viện nào):
-* 📑 **Bố cục Phân Trang (5 Tabs) Chuyên biệt & Tiện Lợi:**
-  * 📊 **Tổng quan & Kết nối:** Theo dõi trạng thái Anycast, Egress IP, PoP Colo, thẻ trạng thái nhanh và lệnh cURL test.
-  * ⚡ **Đo kiểm Tốc độ:** Kiểm tra tốc độ & độ trễ đến 8 trạm Data Center lớn (Singapore, Nhật Bản, Đức, Mỹ, Anh, Phần Lan) hoặc chạy Benchmark toàn bộ có thanh đo trực quan.
-  * 🔀 **Điều hướng Proxy:** Tùy chỉnh bật/tắt Proxy cho Docker Daemon, GitHub CLI, GitLab CLI và đổi cổng SOCKS5 linh hoạt.
-  * 🦊 **GitLab CI/CD:** Hướng dẫn và tạo sẵn cấu hình tăng tốc pipeline `.gitlab-ci.yml` và Runner `config.toml` (kèm nút Copy nhanh).
-  * 📋 **Nhật ký & Chẩn đoán:** Xem log dịch vụ `warp-svc` theo thời gian thực với chế độ tự động làm mới.
-* 🔐 **Bảo mật & Chống Hack toàn diện:**
-  * Trang đăng nhập Dark Mode Glassmorphism bảo vệ tất cả endpoint UI và REST API.
-  * Mã hóa mật khẩu chuẩn công nghiệp **SHA-256 + 16-byte Random Salt**.
-  * **Chống Brute-Force Rate Limiting:** Tự động khóa IP 5 phút nếu nhập sai quá 5 lần liên tiếp.
-  * Quản lý phiên bằng Session Cookie bảo mật (`HttpOnly`, `SameSite=Lax`, tự hủy khi hết hạn).
-  * Hỗ trợ đổi mật khẩu trực tiếp trên Web UI (`🔑 Đổi mật khẩu`).
+Giao diện Web siêu nhẹ (chạy bằng Python 3 standard library có sẵn, không cần cài thêm bất kỳ thư viện pip nào):
 
 ```bash
 # Khởi chạy Web Dashboard trực tiếp:
@@ -151,19 +94,44 @@ sudo bash install.sh --dashboard
 # Cài đặt thành dịch vụ hệ thống (tự chạy ngầm cùng hệ thống khi khởi động lại):
 sudo bash install.sh --dashboard-service
 ```
-*Truy cập trình duyệt tại:* **`http://<IP_MAY_CHU>:8888`**
-* **Tài khoản đăng nhập mặc định:**
-  * Tên đăng nhập: `admin`
-  * Mật khẩu: `datahub@2026`
-* **Đổi mật khẩu đăng nhập bằng dòng lệnh:**
-  ```bash
-  sudo bash install.sh --set-password "MatKhauMoiCuaBan@2026"
-  ```
+*Truy cập trình duyệt tại:* **`http://<IP_MAY_CHU>:8888`** *(Hoặc `http://127.0.0.1:8888`)*
+
+#### 📑 Cấu trúc 5 Tab Chuyên Biệt & Tiện Lợi:
+1. 📊 **Tổng quan & Kết nối (`#overview`):**
+   * Theo dõi trạng thái Anycast thời gian thực (`status-pulse`), trạm PoP (VD: `SIN - Singapore`), cổng SOCKS5 Local, Egress IP Public.
+   * Nút **Bật / Tắt WARP** nhanh với 1 cú click.
+   * Thẻ tóm tắt trạng thái Docker Proxy, Git Proxy kèm lối tắt chuyển tab.
+   * Bảng câu lệnh cURL & Export biến môi trường kèm nút Copy nhanh.
+2. ⚡ **Đo kiểm Tốc độ (`#speedtest`):**
+   * Kiểm tra băng thông và độ trễ (ping/ms) đến 8 Cloud Data Center toàn cầu: 🇸🇬 Singapore, 🇯🇵 Tokyo, 🇩🇪 Đức Falkenstein & Nuremberg, 🇺🇸 Mỹ Ashburn & Hillsboro, 🇬🇧 Anh London, 🇫🇮 Phần Lan.
+   * Nút phím tắt đo nhanh từng trạm hoặc chạy **🚀 Benchmark All** toàn bộ 8 trạm song song.
+   * Đồng hồ số đo MB/s kèm thanh đo trực quan hóa tốc độ (Visual Progress Bar).
+3. 🔀 **Điều hướng Proxy (`#routing`):**
+   * Công tắc bật/tắt Proxy cho **Docker Daemon** (tự động kèm quy tắc `NO_PROXY` Docker Hub).
+   * Công tắc tăng tốc riêng cho **GitHub CLI** (`github.com`).
+   * Công tắc tăng tốc riêng cho **GitLab CLI** (`gitlab.com`).
+   * Ô đổi cổng SOCKS5 Proxy trực tiếp (1024 - 65535).
+   * Hướng dẫn cấu hình Privoxy chuyển đổi HTTP Proxy sang SOCKS5.
+4. 🦊 **GitLab CI/CD (`#gitlab`):**
+   * Cấu hình sẵn khối biến môi trường cho `.gitlab-ci.yml` (kèm nút Copy).
+   * Cấu hình mẫu cho `/etc/gitlab-runner/config.toml` với `network_mode = "host"` (kèm nút Copy).
+   * Liên kết trực tiếp tới file mẫu `gitlab-ci.example.yml` và `gitlab-runner.example.toml`.
+5. 📋 **Nhật ký & Chẩn đoán (`#logs`):**
+   * Xem trực tiếp log dịch vụ `warp-svc` theo thời gian thực trên giao diện terminal.
+   * Hỗ trợ checkbox **Tự động làm mới (5s)** và nút làm mới thủ công.
+
+#### 🔐 Tính năng Bảo Mật Toàn Diện:
+* **Trang Đăng Nhập Glassmorphism Dark Mode:** Tự động chặn và chuyển hướng mọi truy cập trái phép về `/login`.
+* **Mã hóa Mật khẩu SHA-256 + 16-byte Random Salt:** Không lưu plain-text mật khẩu. File cấu hình `.warp_auth.json` được phân quyền an toàn `chmod 600`.
+* **Chống Brute-Force Rate Limiting:** Tự động khóa IP 5 phút nếu nhập sai quá 5 lần liên tiếp (Mã lỗi 429).
+* **Quản lý Phiên An toàn:** Sử dụng Session Cookie ngẫu nhiên 64-hex với cờ `HttpOnly` (chống XSS) và `SameSite=Lax` (chống CSRF).
+* **Tiêu đề HTTP Security:** Tự động gắn `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`.
+* **Đổi mật khẩu trực tiếp:** Hỗ trợ đổi mật khẩu nhanh qua nút `🔑 Đổi mật khẩu` ngay trên Header Web UI.
 
 ---
 
 ### 2. 📟 Terminal Interactive Menu (TUI trong SSH)
-Nếu không muốn mở cổng web ra ngoài, bạn có thể quản lý trực tiếp bằng menu số trong SSH:
+Nếu không muốn mở cổng web ra ngoài Internet, bạn có thể quản lý trực tiếp bằng giao diện số trong terminal SSH:
 
 ```bash
 # Mở menu điều khiển:
@@ -198,19 +166,115 @@ sudo bash install.sh --menu
 
 ---
 
+## 🦊 Tăng tốc GitLab CI/CD Pipeline & GitLab Runner
+Áp dụng cho các máy chủ tự host GitLab Runner đặt tại Data Center để khắc phục tình trạng kéo code từ `gitlab.com` hoặc tải package (NPM, PyPI, Maven, Go) bị chậm hoặc timeout:
+
+### A. Cấu hình cho Runner (`/etc/gitlab-runner/config.toml`):
+> [!IMPORTANT]
+> Nếu Runner sử dụng **Docker Executor**, bắt buộc phải cấu hình `network_mode = "host"` để container job có thể truy cập được SOCKS5 Proxy `127.0.0.1:40000` của máy chủ Host!
+
+```toml
+[[runners]]
+  name = "warp-docker-runner"
+  url = "https://gitlab.com"
+  executor = "docker"
+  environment = [
+    "ALL_PROXY=socks5://127.0.0.1:40000",
+    "NO_PROXY=localhost,127.0.0.1,docker.io,*.docker.com"
+  ]
+  [runners.docker]
+    network_mode = "host"
+```
+*(Xem file mẫu đầy đủ tại [gitlab-runner.example.toml](gitlab-runner.example.toml))*
+
+### B. Cấu hình trong `.gitlab-ci.yml` (Toàn bộ Pipeline):
+```yaml
+variables:
+  ALL_PROXY: "socks5://127.0.0.1:40000"
+  HTTP_PROXY: "socks5://127.0.0.1:40000"
+  HTTPS_PROXY: "socks5://127.0.0.1:40000"
+  NO_PROXY: "localhost,127.0.0.1,docker.io,*.docker.com"
+```
+*(Xem file pipeline mẫu đầy đủ cho Node, Python, Docker tại [gitlab-ci.example.yml](gitlab-ci.example.yml))*
+
+---
+
+## 📖 Hướng dẫn sử dụng sau khi cài đặt
+
+### 1. Tăng tốc Git CLI (Chỉ cho GitHub / GitLab quốc tế)
+```bash
+# Chỉ riêng GitHub đi qua WARP SOCKS5:
+git config --global http."https://github.com/".proxy "socks5://127.0.0.1:40000"
+
+# Chỉ riêng GitLab đi qua WARP SOCKS5:
+git config --global http."https://gitlab.com/".proxy "socks5://127.0.0.1:40000"
+
+# Hủy cấu hình (khi muốn về mặc định):
+git config --global --unset http."https://github.com/".proxy
+git config --global --unset http."https://gitlab.com/".proxy
+```
+
+### 2. Sử dụng với cURL
+```bash
+curl --socks5-hostname 127.0.0.1:40000 https://cloudflare.com/cdn-cgi/trace
+```
+
+### 3. Dùng biến môi trường tạm thời cho phiên Terminal
+```bash
+export all_proxy="socks5://127.0.0.1:40000"
+export ALL_PROXY="socks5://127.0.0.1:40000"
+
+# Tắt proxy:
+unset all_proxy ALL_PROXY
+```
+
+### 4. Cấu hình cho Docker Daemon (Kèm NO_PROXY)
+Tạo file `/etc/systemd/system/docker.service.d/http-proxy.conf`:
+```ini
+[Service]
+Environment="HTTP_PROXY=socks5://127.0.0.1:40000"
+Environment="HTTPS_PROXY=socks5://127.0.0.1:40000"
+Environment="NO_PROXY=localhost,127.0.0.1,docker.io,*.docker.com,production.cloudflare.docker.com"
+```
+Khởi động lại Docker:
+```bash
+sudo systemctl daemon-reload && sudo systemctl restart docker
+```
+
+---
+
+## 🔐 Bảo Mật & Quản Lý Mật Khẩu Web UI
+
+### Thông tin đăng nhập mặc định:
+* **Tài khoản:** `admin`
+* **Mật khẩu mặc định:** `datahub@2026`
+
+### 3 cách đổi mật khẩu nhanh:
+1. **Trên Web UI:** Đăng nhập và nhấp vào nút **`🔑 Đổi mật khẩu`** trên góc phải màn hình.
+2. **Qua Menu Terminal:** Chạy `sudo bash menu.sh` và chọn mục **`[10] 🔐 Đổi mật khẩu Web Dashboard`**.
+3. **Bằng câu lệnh CLI:**
+   ```bash
+   sudo bash install.sh --set-password "MatKhauMoiCuaBan@2026"
+   ```
+
+---
+
 ## 📌 Các lệnh quản lý tiện ích
 
 ```bash
-# Mở menu Terminal
+# Mở menu Terminal TUI
 sudo bash install.sh --menu
 
-# Chạy Web Dashboard
+# Chạy Web Dashboard trên cổng 8888
 sudo bash install.sh --dashboard
 
-# Cài đặt Web Dashboard chạy nền cùng hệ thống
+# Cài đặt Web Dashboard chạy nền cùng hệ thống (systemd)
 sudo bash install.sh --dashboard-service
 
-# Kiểm tra trạng thái kết nối
+# Đổi mật khẩu đăng nhập Web Dashboard
+sudo bash install.sh --set-password "MatKhauMoi@2026"
+
+# Kiểm tra trạng thái kết nối WARP
 sudo bash install.sh --status
 
 # Gỡ bỏ cài đặt hoàn toàn khỏi hệ thống
@@ -223,4 +287,4 @@ sudo bash install.sh --help
 ---
 
 ## 📄 Tài liệu chi tiết
-Chi tiết về số liệu đo kiểm thực tế (Hetzner Đức vs Docker Hub), nguyên lý định tuyến và cấu hình Privoxy nâng cao: xem tại [CF_Warp_guideline.md](file:///root/linux-cloudflare-warp/CF_Warp_guideline.md).
+Chi tiết về số liệu đo kiểm thực tế (Hetzner Đức vs Docker Hub), nguyên lý định tuyến và cấu hình Privoxy nâng cao: xem tại **[CF_Warp_guideline.md](CF_Warp_guideline.md)**.
