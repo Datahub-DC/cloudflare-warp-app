@@ -90,6 +90,37 @@ Khởi động lại Docker:
 sudo systemctl daemon-reload && sudo systemctl restart docker
 ```
 
+### 5. Tăng tốc GitLab CI/CD Pipeline & GitLab Runner
+Áp dụng cho các máy chủ tự host GitLab Runner đặt tại Data Center để khắc phục tình trạng kéo code từ `gitlab.com` hoặc tải package (NPM, PyPI, Maven, Go) bị chậm:
+
+#### A. Cấu hình cho Runner (`/etc/gitlab-runner/config.toml`):
+> [!IMPORTANT]
+> Nếu Runner sử dụng **Docker Executor**, bắt buộc phải cấu hình `network_mode = "host"` để container job có thể truy cập được SOCKS5 Proxy `127.0.0.1:40000` của máy chủ Host!
+
+```toml
+[[runners]]
+  name = "warp-docker-runner"
+  url = "https://gitlab.com"
+  executor = "docker"
+  environment = [
+    "ALL_PROXY=socks5://127.0.0.1:40000",
+    "NO_PROXY=localhost,127.0.0.1,docker.io,*.docker.com"
+  ]
+  [runners.docker]
+    network_mode = "host"
+```
+*(Xem file mẫu đầy đủ tại [gitlab-runner.example.toml](file:///root/linux-cloudflare-warp/gitlab-runner.example.toml))*
+
+#### B. Cấu hình trong `.gitlab-ci.yml` (Toàn bộ Pipeline):
+```yaml
+variables:
+  ALL_PROXY: "socks5://127.0.0.1:40000"
+  HTTP_PROXY: "socks5://127.0.0.1:40000"
+  HTTPS_PROXY: "socks5://127.0.0.1:40000"
+  NO_PROXY: "localhost,127.0.0.1,docker.io,*.docker.com"
+```
+*(Xem file pipeline mẫu đầy đủ cho Node, Python, Docker tại [gitlab-ci.example.yml](file:///root/linux-cloudflare-warp/gitlab-ci.example.yml))*
+
 ---
 
 ## 🖥️ Giao Diện Trực Quan Thay Vì Gõ Lệnh CLI

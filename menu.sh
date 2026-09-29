@@ -64,15 +64,20 @@ header() {
     # Kiểm tra trạng thái Docker & Git
     local docker_st="${RED}Tắt${NC}"
     if [ -f /etc/systemd/system/docker.service.d/http-proxy.conf ]; then
-        docker_st="${GREEN}Bật (kèm NO_PROXY Docker Hub)${NC}"
+        docker_st="${GREEN}Bật (kèm NO_PROXY)${NC}"
     fi
 
-    local git_st="${RED}Tắt${NC}"
+    local github_st="${RED}Tắt${NC}"
     if git config --global http."https://github.com/".proxy 2>/dev/null | grep -q "socks5"; then
-        git_st="${GREEN}Bật (github.com)${NC}"
+        github_st="${GREEN}Bật${NC}"
     fi
 
-    echo -e "  Tích hợp    : Docker [${docker_st}] | Git [${git_st}]"
+    local gitlab_st="${RED}Tắt${NC}"
+    if git config --global http."https://gitlab.com/".proxy 2>/dev/null | grep -q "socks5"; then
+        gitlab_st="${GREEN}Bật${NC}"
+    fi
+
+    echo -e "  Tích hợp    : Docker [${docker_st}] | GitHub [${github_st}] | GitLab [${gitlab_st}]"
     echo -e "${CYAN}──────────────────────────────────────────────────────────────────────${NC}"
 }
 
@@ -235,6 +240,49 @@ toggle_git() {
     fi
 }
 
+toggle_gitlab() {
+    local port
+    port=$(get_current_port)
+    if git config --global http."https://gitlab.com/".proxy 2>/dev/null | grep -q "socks5"; then
+        echo -e "${YELLOW}Đang hủy cấu hình proxy cho GitLab...${NC}"
+        git config --global --unset http."https://gitlab.com/".proxy
+        echo -e "${GREEN}Đã hủy proxy GitLab. Git sẽ kết nối trực tiếp.${NC}"
+    else
+        echo -e "${YELLOW}Đang cấu hình proxy WARP SOCKS5 cho riêng GitLab (gitlab.com)...${NC}"
+        git config --global http."https://gitlab.com/".proxy "socks5://127.0.0.1:${port}"
+        echo -e "${GREEN}Đã cấu hình proxy GitLab thành công!${NC}"
+    fi
+}
+
+show_gitlab_cicd_guide() {
+    clear_screen
+    echo -e "${CYAN}╔══════════════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${CYAN}║${NC}   ${BOLD}${YELLOW}HƯỚNG DẪN TĂNG TỐC GITLAB CI/CD QUA CLOUDFLARE WARP${NC}             ${CYAN}║${NC}"
+    echo -e "${CYAN}╚══════════════════════════════════════════════════════════════════════╝${NC}"
+    echo ""
+    echo -e "${BOLD}1. DÀNH CHO FILE .gitlab-ci.yml (Toàn bộ Pipeline):${NC}"
+    echo -e "Thêm khối variables vào đầu file .gitlab-ci.yml:"
+    echo -e "${YELLOW}------------------------------------------------------------${NC}"
+    echo -e "${CYAN}variables:${NC}"
+    echo -e "  ${CYAN}ALL_PROXY: \"socks5://127.0.0.1:40000\"${NC}"
+    echo -e "  ${CYAN}HTTP_PROXY: \"socks5://127.0.0.1:40000\"${NC}"
+    echo -e "  ${CYAN}HTTPS_PROXY: \"socks5://127.0.0.1:40000\"${NC}"
+    echo -e "  ${CYAN}NO_PROXY: \"localhost,127.0.0.1,docker.io,*.docker.com\"${NC}"
+    echo -e "${YELLOW}------------------------------------------------------------${NC}"
+    echo ""
+    echo -e "${BOLD}2. DÀNH CHO GITLAB RUNNER (/etc/gitlab-runner/config.toml):${NC}"
+    echo -e "Nếu dùng Docker Executor, bắt buộc thêm ${GREEN}network_mode = \"host\"${NC}:"
+    echo -e "${YELLOW}------------------------------------------------------------${NC}"
+    echo -e "${CYAN}[[runners]]${NC}"
+    echo -e "  ${CYAN}executor = \"docker\"${NC}"
+    echo -e "  ${CYAN}environment = [\"ALL_PROXY=socks5://127.0.0.1:40000\"]${NC}"
+    echo -e "  ${CYAN}[runners.docker]${NC}"
+    echo -e "    ${GREEN}network_mode = \"host\"${NC}"
+    echo -e "${YELLOW}------------------------------------------------------------${NC}"
+    echo ""
+    echo -e "File mẫu chi tiết: ${GREEN}gitlab-ci.example.yml${NC} & ${GREEN}gitlab-runner.example.toml${NC}"
+}
+
 change_port() {
     local old_port
     old_port=$(get_current_port)
@@ -278,13 +326,15 @@ while true; do
     echo -e "  ${BOLD}[2]${NC} ${RED}Tạm ngắt kết nối WARP${NC} (Disconnect)"
     echo -e "  ${BOLD}[3]${NC} ${YELLOW}Đổi cổng SOCKS5 Proxy${NC} (Change Port)"
     echo -e "  ${BOLD}[4]${NC} ${CYAN}Bật / Tắt Proxy cho Docker Daemon${NC} (kèm NO_PROXY)"
-    echo -e "  ${BOLD}[5]${NC} ${BLUE}Bật / Tắt Proxy cho GitHub CLI${NC}"
-    echo -e "  ${BOLD}[6]${NC} ⚡ ${BOLD}Đo kiểm tốc độ mạng quốc tế${NC} (Speed Test)"
-    echo -e "  ${BOLD}[7]${NC} 🌐 ${MAGENTA}Mở Web Dashboard trên trình duyệt${NC} (Port 8888)"
-    echo -e "  ${BOLD}[8]${NC} 📋 Xem log dịch vụ (warp-svc logs)"
+    echo -e "  ${BOLD}[5]${NC} ${BLUE}Bật / Tắt Proxy cho GitHub CLI${NC} (github.com)"
+    echo -e "  ${BOLD}[6]${NC} ${MAGENTA}Bật / Tắt Proxy cho GitLab CLI${NC} (gitlab.com)"
+    echo -e "  ${BOLD}[7]${NC} 🦊 ${BOLD}Xem cấu hình tăng tốc GitLab CI/CD & Runner${NC}"
+    echo -e "  ${BOLD}[8]${NC} ⚡ ${BOLD}Đo kiểm tốc độ mạng quốc tế${NC} (Speed Test)"
+    echo -e "  ${BOLD}[9]${NC} 🌐 ${CYAN}Mở Web Dashboard trên trình duyệt${NC} (Port 8888)"
+    echo -e "  ${BOLD}[10]${NC} 📋 Xem log dịch vụ (warp-svc logs)"
     echo -e "  ${BOLD}[0]${NC} Thoát"
     echo -e "${CYAN}──────────────────────────────────────────────────────────────────────${NC}"
-    read -rp "Chọn thao tác [0-8]: " choice
+    read -rp "Chọn thao tác [0-10]: " choice
 
     case "$choice" in
         1)
@@ -314,13 +364,21 @@ while true; do
             pause
             ;;
         6)
-            speed_test_menu
+            toggle_gitlab
+            pause
             ;;
         7)
-            start_web_dashboard
+            show_gitlab_cicd_guide
             pause
             ;;
         8)
+            speed_test_menu
+            ;;
+        9)
+            start_web_dashboard
+            pause
+            ;;
+        10)
             journalctl -u warp-svc -n 30 --no-pager
             pause
             ;;

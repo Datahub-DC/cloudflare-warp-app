@@ -123,6 +123,9 @@ def get_warp_status():
     _, git_proxy_out, _ = run_cmd("git config --global http.\"https://github.com/\".proxy")
     git_proxy_enabled = bool(git_proxy_out)
 
+    _, gitlab_proxy_out, _ = run_cmd("git config --global http.\"https://gitlab.com/\".proxy")
+    gitlab_proxy_enabled = bool(gitlab_proxy_out)
+
     return {
         "connected": is_connected,
         "warp_active": warp_on,
@@ -131,6 +134,7 @@ def get_warp_status():
         "ip": ip,
         "docker_proxy": docker_proxy_enabled,
         "git_proxy": git_proxy_enabled,
+        "gitlab_proxy": gitlab_proxy_enabled,
         "raw_status": status_out or "WARP Service Offline"
     }
 
@@ -516,10 +520,21 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
       <div class="control-item">
         <div class="control-info">
           <h4>Tăng tốc Git CLI cho GitHub (https://github.com/)</h4>
-          <p>Chỉ định tuyến riêng git clone/push của GitHub đi qua WARP SOCKS5, không ảnh hưởng GitLab/Git nội bộ.</p>
+          <p>Chỉ định tuyến riêng git clone/push của GitHub đi qua WARP SOCKS5, không ảnh hưởng Git nội bộ.</p>
         </div>
         <label class="switch">
           <input type="checkbox" id="gitSwitch" onchange="toggleGitProxy()">
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <div class="control-item">
+        <div class="control-info">
+          <h4>Tăng tốc Git CLI cho GitLab (https://gitlab.com/)</h4>
+          <p>Chỉ định tuyến riêng git clone/fetch của GitLab quốc tế qua WARP SOCKS5.</p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="gitlabSwitch" onchange="toggleGitLabProxy()">
           <span class="slider"></span>
         </label>
       </div>
@@ -532,6 +547,41 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         <div style="display: flex; gap: 8px;">
           <input type="number" id="customPortInput" style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.15); color: white; padding: 6px 10px; border-radius: 8px; width: 100px; font-family: monospace;" value="40000">
           <button onclick="saveCustomPort()" class="btn btn-secondary btn-sm">Lưu</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- GitLab CI/CD Acceleration Card -->
+    <div class="card col-12">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+        <h3 style="font-size: 16px; font-weight: 700;">🦊 Tăng Tốc GitLab CI/CD Pipeline & Runner</h3>
+        <span style="font-size: 12px; color: var(--accent); font-weight: 600;">SOCKS5: 127.0.0.1:40000</span>
+      </div>
+      <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 14px;">
+        Tăng tốc độ kéo mã nguồn từ gitlab.com, kéo container image từ registry.gitlab.com và tải các package (NPM, PyPI, Go) trong pipeline.
+      </p>
+
+      <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px;">
+        <div>
+          <div style="font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">1. Cho file .gitlab-ci.yml (Toàn bộ Pipeline):</div>
+          <div class="code-snippet" style="flex-direction: column; align-items: flex-start; gap: 8px;">
+            <code style="white-space: pre;">variables:
+  ALL_PROXY: "socks5://127.0.0.1:40000"
+  NO_PROXY: "localhost,127.0.0.1,docker.io,*.docker.com"</code>
+            <button onclick="copyToClipboard('variables:\n  ALL_PROXY: \x22socks5://127.0.0.1:40000\x22\n  NO_PROXY: \x22localhost,127.0.0.1,docker.io,*.docker.com\x22')" class="btn btn-secondary btn-sm" style="align-self: flex-end;">Copy YAML</button>
+          </div>
+        </div>
+
+        <div>
+          <div style="font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">2. Cho Runner (/etc/gitlab-runner/config.toml):</div>
+          <div class="code-snippet" style="flex-direction: column; align-items: flex-start; gap: 8px;">
+            <code style="white-space: pre;">[runners.docker]
+  network_mode = "host"
+environment = [
+  "ALL_PROXY=socks5://127.0.0.1:40000"
+]</code>
+            <button onclick="copyToClipboard('[runners.docker]\n  network_mode = \x22host\x22\nenvironment = [\n  \x22ALL_PROXY=socks5://127.0.0.1:40000\x22\n]')" class="btn btn-secondary btn-sm" style="align-self: flex-end;">Copy TOML</button>
+          </div>
         </div>
       </div>
     </div>
@@ -608,6 +658,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     document.getElementById('customPortInput').value = data.port;
     document.getElementById('dockerSwitch').checked = data.docker_proxy;
     document.getElementById('gitSwitch').checked = data.git_proxy;
+    document.getElementById('gitlabSwitch').checked = data.gitlab_proxy;
   }
 
   async function toggleWarp() {
@@ -648,10 +699,26 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ enable })
       });
-      showToast('Cập nhật cấu hình Git thành công!');
+      showToast('Cập nhật cấu hình GitHub thành công!');
       setTimeout(fetchStatus, 1000);
     } catch (e) {
-      showToast('Lỗi cấu hình Git: ' + e);
+      showToast('Lỗi cấu hình GitHub: ' + e);
+    }
+  }
+
+  async function toggleGitLabProxy() {
+    const enable = document.getElementById('gitlabSwitch').checked;
+    showToast(enable ? 'Đang cấu hình Proxy cho GitLab...' : 'Đang hủy Proxy cho GitLab...');
+    try {
+      await fetch('/api/toggle-gitlab', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enable })
+      });
+      showToast('Cập nhật cấu hình GitLab thành công!');
+      setTimeout(fetchStatus, 1000);
+    } catch (e) {
+      showToast('Lỗi cấu hình GitLab: ' + e);
     }
   }
 
@@ -874,6 +941,17 @@ Environment="NO_PROXY=localhost,127.0.0.1,docker.io,*.docker.io,*.docker.com,pro
             else:
                 run_cmd("git config --global --unset http.\"https://github.com/\".proxy")
             self.send_json({"success": True, "git_proxy": enable})
+            return
+
+        if path == "/api/toggle-gitlab":
+            enable = req_data.get("enable", True)
+            status = get_warp_status()
+            port = status.get("port", 40000)
+            if enable:
+                run_cmd(f"git config --global http.\"https://gitlab.com/\".proxy \"socks5://127.0.0.1:{port}\"")
+            else:
+                run_cmd("git config --global --unset http.\"https://gitlab.com/\".proxy")
+            self.send_json({"success": True, "gitlab_proxy": enable})
             return
 
         if path == "/api/test-speed":

@@ -1,0 +1,62 @@
+# ==============================================================================
+# GitLab CI/CD Pipeline Template - Cloudflare WARP Acceleration
+# Áp dụng cho Runner tự host đặt tại DataHub DC (kết nối SOCKS5 127.0.0.1:40000)
+# ==============================================================================
+
+# 1. BIẾN MÔI TRƯỜNG TOÀN CỤC CHO PIPELINE
+# (Lưu ý: Runner cần chạy ở chế độ Shell Executor hoặc Docker Executor với network_mode = "host")
+variables:
+  # Thiết lập proxy cho các tiến trình cURL, Git, Wget
+  ALL_PROXY: "socks5://127.0.0.1:40000"
+  all_proxy: "socks5://127.0.0.1:40000"
+  HTTP_PROXY: "socks5://127.0.0.1:40000"
+  HTTPS_PROXY: "socks5://127.0.0.1:40000"
+  # Bỏ qua proxy cho mạng nội bộ và Docker Hub để không bị bóp băng thông
+  NO_PROXY: "localhost,127.0.0.1,docker.io,*.docker.io,*.docker.com,103.186.100.0/23,192.168.0.0/16"
+  no_proxy: "localhost,127.0.0.1,docker.io,*.docker.io,*.docker.com,103.186.100.0/23,192.168.0.0/16"
+
+# 2. TEMPLATE DÙNG LẠI CHO CÁC JOB CẦN TĂNG TỐC QUỐC TẾ
+.warp_accelerated_job:
+  before_script:
+    # Cấu hình Git trong container / shell để tải submodule hoặc fetch nhanh
+    - git config --global http."https://gitlab.com/".proxy "socks5://127.0.0.1:40000"
+    - git config --global http."https://github.com/".proxy "socks5://127.0.0.1:40000"
+
+# ------------------------------------------------------------------------------
+# VÍ DỤ 1: JOB NODEJS / NPM / YARN (Tăng tốc tải package từ npmjs.org)
+# ------------------------------------------------------------------------------
+test_node_job:
+  extends: .warp_accelerated_job
+  image: node:20-alpine
+  stage: test
+  script:
+    # Kiểm tra IP kết nối (phải ra IP Cloudflare WARP)
+    - curl -s https://cloudflare.com/cdn-cgi/trace | grep -E "warp=|colo="
+    # Cài đặt package với proxy WARP
+    - npm config set proxy http://127.0.0.1:40000 || true
+    - npm install
+    - npm test
+
+# ------------------------------------------------------------------------------
+# VÍ DỤ 2: JOB PYTHON / PIP (Tăng tốc tải package từ pypi.org)
+# ------------------------------------------------------------------------------
+test_python_job:
+  extends: .warp_accelerated_job
+  image: python:3.11-slim
+  stage: test
+  script:
+    - pip install --proxy socks5://127.0.0.1:40000 -r requirements.txt
+    - pytest
+
+# ------------------------------------------------------------------------------
+# VÍ DỤ 3: JOB BUILD DOCKER IMAGE
+# ------------------------------------------------------------------------------
+build_docker_job:
+  stage: build
+  script:
+    # Truyền proxy vào lúc docker build để apt/apk/curl bên trong Dockerfile chạy qua WARP
+    - docker build 
+        --build-arg HTTP_PROXY="socks5://127.0.0.1:40000" 
+        --build-arg HTTPS_PROXY="socks5://127.0.0.1:40000" 
+        --build-arg NO_PROXY="$NO_PROXY" 
+        -t my-app:latest .

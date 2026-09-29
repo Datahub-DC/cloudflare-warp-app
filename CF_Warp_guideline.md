@@ -1,7 +1,7 @@
 # HƯỚNG DẪN CÀI ĐẶT & TỐI ƯU HÓA CLOUDFLARE WARP TRÊN MÁY CHỦ DATA CENTER
 
-> **Mục tiêu:** Tăng tốc đường truyền quốc tế (Git, CI/CD, Package, Server quốc tế) tránh bị bóp băng thông, đồng thời tối ưu định tuyến để không làm chậm các dịch vụ có CDN gần (như Docker Hub).  
-> **Môi trường áp dụng:** Ubuntu 24.04 LTS / Debian / RHEL trên hạ tầng DataHub DC (CMC Telecom).  
+> **Mục tiêu:** Tăng tốc đường truyền quốc tế (Git, CI/CD, Package, Server quốc tế), đồng thời tối ưu định tuyến để không làm chậm các dịch vụ có CDN gần (như Docker Hub).  
+> **Môi trường áp dụng:** Ubuntu / Debian / RHEL trên hạ tầng DataHub DC (CMC Telecom).  
 > **Chi phí:** 0 VNĐ (Cloudflare WARP Free Tier).
 
 ---
@@ -12,7 +12,7 @@
 * Cloudflare sở hữu các trạm Anycast PoP đặt ngay tại Việt Nam (**SGN - TP.HCM** và **HAN - Hà Nội**), có kết nối peering trực tiếp với CMC Telecom qua hạ tầng **mạng nội địa (Domestic)** tốc độ cao.
 * Khi kết nối WARP, dữ liệu từ server tới trạm Cloudflare được tính là băng thông trong nước. Từ Cloudflare, gói tin ra quốc tế sẽ chạy trên **hệ thống cáp quang riêng (Private Backbone)** của Cloudflare, vượt qua các điểm nghẽn và hạn chế bóp băng thông quốc tế thông thường.
 
-### 1.2. ⚠️ Cảnh báo an toàn tuyệt đối cho Server Data Center
+### 1.2. ⚠️ Cảnh báo an toàn tuyệt đối
 > [!CAUTION]
 > **TUYỆT ĐỐI KHÔNG DÙNG CHẾ ĐỘ MẶC ĐỊNH (FULL TUNNEL / VPN MODE):**
 > * Mặc định lệnh `warp-cli connect` sẽ tạo card mạng ảo và ghi đè Default Gateway (`0.0.0.0/0`).
@@ -151,7 +151,38 @@ export ALL_PROXY="socks5://127.0.0.1:40000"
 unset all_proxy ALL_PROXY
 ```
 
-### 5.4. Giải pháp nâng cao: Dùng Privoxy làm Proxy điều hướng tự động
+### 5.4. Tăng tốc GitLab CI/CD Pipeline & Runner
+Đối với các máy chủ đóng vai trò làm GitLab Runner tự host (Self-hosted Runner) tại Data Center, việc kéo mã nguồn từ `gitlab.com` hoặc tải container image từ `registry.gitlab.com` thường bị bóp băng thông quốc tế.
+
+#### 1. Cấu hình Runner (`/etc/gitlab-runner/config.toml`):
+* Với **Docker Executor**, bắt buộc phải thêm `network_mode = "host"` để job container có thể kết nối tới SOCKS5 Proxy `127.0.0.1:40000` của máy chủ Host:
+```toml
+[[runners]]
+  name = "warp-docker-runner"
+  url = "https://gitlab.com"
+  executor = "docker"
+  environment = [
+    "ALL_PROXY=socks5://127.0.0.1:40000",
+    "HTTP_PROXY=socks5://127.0.0.1:40000",
+    "HTTPS_PROXY=socks5://127.0.0.1:40000",
+    "NO_PROXY=localhost,127.0.0.1,docker.io,*.docker.com"
+  ]
+  [runners.docker]
+    network_mode = "host"
+```
+
+#### 2. Cấu hình trong `.gitlab-ci.yml`:
+Thêm vào đầu file pipeline để toàn bộ các bước (tải package NPM, pip, Go, clone submodule) tự động đi qua WARP:
+```yaml
+variables:
+  ALL_PROXY: "socks5://127.0.0.1:40000"
+  HTTP_PROXY: "socks5://127.0.0.1:40000"
+  HTTPS_PROXY: "socks5://127.0.0.1:40000"
+  NO_PROXY: "localhost,127.0.0.1,docker.io,*.docker.com"
+```
+*(Tham khảo mẫu hoàn chỉnh tại `gitlab-ci.example.yml` và `gitlab-runner.example.toml`).*
+
+### 5.5. Giải pháp nâng cao: Dùng Privoxy làm Proxy điều hướng tự động
 Nếu muốn một cổng HTTP proxy duy nhất (ví dụ `127.0.0.1:8118`) tự động nhận diện domain để đi thẳng hay đi qua WARP:
 
 1. Cài đặt Privoxy:
