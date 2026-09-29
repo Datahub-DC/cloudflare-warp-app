@@ -4,6 +4,7 @@
 # Description   : Tự động cài đặt và cấu hình Cloudflare WARP an toàn (SOCKS5 Proxy)
 # Supported OS  : Ubuntu 20.04 (Focal), 22.04 (Jammy), 24.04 (Noble), 26.04 (Resolute)
 # Author        : DataHub DC Support Team
+# Email         : jason.nguyen@hextech.vn
 # Safety Rule   : Bắt buộc dùng Proxy Mode (Port 40000), không can thiệp bảng định tuyến,
 #                 đảm bảo kết nối SSH IP Public không bao giờ bị gián đoạn.
 # ==============================================================================
