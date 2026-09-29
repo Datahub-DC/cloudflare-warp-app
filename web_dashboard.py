@@ -864,121 +864,124 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg: #090d16;
-      --card-bg: rgba(18, 24, 38, 0.7);
+      --bg: #070b14;
+      --card-bg: rgba(15, 23, 42, 0.72);
       --card-border: rgba(255, 255, 255, 0.08);
+      --card-border-hover: rgba(255, 255, 255, 0.16);
       --primary: #f6821f;
       --primary-hover: #fa973f;
-      --primary-glow: rgba(246, 130, 31, 0.25);
-      --accent: #00d2ff;
+      --primary-glow: rgba(246, 130, 31, 0.28);
+      --accent: #38bdf8;
+      --accent-glow: rgba(56, 189, 248, 0.25);
       --success: #10b981;
       --success-glow: rgba(16, 185, 129, 0.25);
       --danger: #ef4444;
-      --danger-glow: rgba(239, 68, 68, 0.25);
-      --text: #f3f4f6;
-      --text-muted: #9ca3af;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --text-dim: #64748b;
+      --radius-sm: 8px;
+      --radius-md: 12px;
+      --radius-lg: 18px;
     }
 
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Plus Jakarta Sans', sans-serif; }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif; }
 
     body {
       background-color: var(--bg);
       background-image: 
-        radial-gradient(at 0% 0%, rgba(246, 130, 31, 0.08) 0px, transparent 50%),
-        radial-gradient(at 100% 100%, rgba(0, 210, 255, 0.08) 0px, transparent 50%);
+        radial-gradient(at 0% 0%, rgba(246, 130, 31, 0.09) 0px, transparent 50%),
+        radial-gradient(at 100% 0%, rgba(56, 189, 248, 0.07) 0px, transparent 40%),
+        radial-gradient(at 50% 100%, rgba(16, 185, 129, 0.05) 0px, transparent 50%);
       color: var(--text);
       min-height: 100vh;
       display: flex;
       flex-direction: column;
       align-items: center;
-      padding: 30px 20px;
+      padding: 24px 16px 40px;
+      -webkit-font-smoothing: antialiased;
     }
 
-    .container { width: 100%; max-width: 980px; }
+    .container { width: 100%; max-width: 1040px; }
 
-    header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 28px; }
+    /* Header */
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 22px;
+      flex-wrap: wrap;
+      gap: 14px;
+    }
 
-    .brand { display: flex; align-items: center; gap: 14px; }
+    .brand { display: flex; align-items: center; gap: 12px; }
 
     .brand-logo {
-      width: 44px; height: 44px;
+      width: 42px; height: 42px;
       background: linear-gradient(135deg, #f6821f, #ff5e3a);
       border-radius: 12px;
       display: flex; align-items: center; justify-content: center;
       box-shadow: 0 8px 24px var(--primary-glow);
     }
+    .brand-logo svg { width: 22px; height: 22px; fill: white; }
 
-    .brand-logo svg { width: 24px; height: 24px; fill: white; }
-    .brand-text h1 { font-size: 22px; font-weight: 800; letter-spacing: -0.5px; }
-    .brand-text p { font-size: 13px; color: var(--text-muted); }
+    .brand-text h1 {
+      font-size: 20px;
+      font-weight: 800;
+      letter-spacing: -0.4px;
+      line-height: 1.2;
+    }
+    .brand-text p {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    .version-chip {
+      font-size: 10px;
+      font-weight: 700;
+      color: #fdba74;
+      background: rgba(246, 130, 31, 0.15);
+      border: 1px solid rgba(246, 130, 31, 0.3);
+      padding: 2px 7px;
+      border-radius: 6px;
+      letter-spacing: 0.3px;
+    }
 
-    .header-actions { display: flex; align-items: center; gap: 10px; }
+    .header-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
     .badge-mode {
       background: rgba(16, 185, 129, 0.12);
       border: 1px solid rgba(16, 185, 129, 0.3);
       color: var(--success);
-      font-size: 12px; font-weight: 600;
+      font-size: 11px; font-weight: 600;
       padding: 6px 12px; border-radius: 20px;
       display: flex; align-items: center; gap: 6px;
     }
-
     .badge-mode .dot {
       width: 6px; height: 6px;
       background: var(--success); border-radius: 50%;
       box-shadow: 0 0 8px var(--success);
     }
 
-    .dashboard-grid {
-      display: grid;
-      grid-template-columns: repeat(12, 1fr);
-      gap: 20px;
-      margin-bottom: 24px;
-    }
-
-    .card {
-      background: var(--card-bg);
-      border: 1px solid var(--card-border);
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
-      border-radius: 18px;
-      padding: 24px;
-      position: relative;
-      overflow: hidden;
-      transition: border-color 0.25s, transform 0.25s;
-    }
-
-    .card:hover { border-color: rgba(255, 255, 255, 0.15); }
-
-    .col-3 { grid-column: span 3; }
-    .col-4 { grid-column: span 4; }
-    .col-5 { grid-column: span 5; }
-    .col-6 { grid-column: span 6; }
-    .col-7 { grid-column: span 7; }
-    .col-8 { grid-column: span 8; }
-    .col-12 { grid-column: span 12; }
-
-    @media (max-width: 860px) {
-      .col-7, .col-5, .col-6, .col-4, .col-3, .col-8 { grid-column: span 12; }
-    }
-
-    /* Tabs Navigation Bar */
+    /* Tabs Bar */
     .tabs-bar {
       display: flex;
-      gap: 6px;
-      margin-bottom: 22px;
-      background: rgba(15, 23, 42, 0.75);
-      backdrop-filter: blur(16px);
-      padding: 6px;
+      gap: 4px;
+      margin-bottom: 20px;
+      background: rgba(15, 23, 42, 0.8);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      padding: 5px;
       border-radius: 14px;
       border: 1px solid rgba(255, 255, 255, 0.08);
       overflow-x: auto;
+      scrollbar-width: none;
     }
+    .tabs-bar::-webkit-scrollbar { display: none; }
+
     .tab-btn {
       display: inline-flex;
       align-items: center;
-      gap: 8px;
-      padding: 10px 18px;
+      gap: 7px;
+      padding: 8px 16px;
       font-size: 13px;
       font-weight: 600;
       color: var(--text-muted);
@@ -996,57 +999,178 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     }
     .tab-btn.active {
       color: #ffffff;
-      background: linear-gradient(135deg, rgba(249, 115, 22, 0.95) 0%, rgba(234, 88, 12, 0.95) 100%);
+      background: linear-gradient(135deg, rgba(246, 130, 31, 0.95), rgba(234, 88, 12, 0.95));
       box-shadow: 0 4px 16px var(--primary-glow);
       border-color: rgba(255, 255, 255, 0.2);
     }
+
     .tab-pane {
       display: none;
-      animation: tabFadeIn 0.25s ease-out;
+      animation: tabFadeIn 0.2s ease-out;
     }
-    .tab-pane.active {
-      display: block;
-    }
+    .tab-pane.active { display: block; }
     @keyframes tabFadeIn {
-      from { opacity: 0; transform: translateY(6px); }
+      from { opacity: 0; transform: translateY(4px); }
       to { opacity: 1; transform: translateY(0); }
     }
 
-    /* Metric & Shortcut Cards */
-    .metric-card {
+    /* Dashboard Grid & Cards */
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-radius: var(--radius-lg);
+      padding: 20px;
+      position: relative;
+      transition: border-color 0.2s, transform 0.2s;
+    }
+    .card:hover { border-color: var(--card-border-hover); }
+
+    .col-3 { grid-column: span 3; }
+    .col-4 { grid-column: span 4; }
+    .col-5 { grid-column: span 5; }
+    .col-6 { grid-column: span 6; }
+    .col-7 { grid-column: span 7; }
+    .col-8 { grid-column: span 8; }
+    .col-12 { grid-column: span 12; }
+
+    @media (max-width: 880px) {
+      .col-3, .col-4, .col-5, .col-6, .col-7, .col-8 { grid-column: span 12; }
+    }
+
+    /* Clean Accordion for Folding Technical/Secondary Details */
+    .clean-accordion {
+      background: rgba(0, 0, 0, 0.25);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: var(--radius-md);
+      overflow: hidden;
+      transition: all 0.2s;
+      margin-top: 12px;
+    }
+    .clean-accordion[open] {
+      background: rgba(0, 0, 0, 0.35);
+      border-color: rgba(255, 255, 255, 0.1);
+    }
+    .clean-accordion summary {
+      padding: 10px 14px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      cursor: pointer;
+      user-select: none;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      outline: none;
+      transition: color 0.15s;
+    }
+    .clean-accordion summary:hover { color: var(--text); }
+    .clean-accordion summary::-webkit-details-marker { display: none; }
+    .clean-accordion-body {
+      padding: 12px 14px;
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    /* Hero Status Box */
+    .hero-box {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .hero-info {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .status-pulse {
+      width: 14px; height: 14px; border-radius: 50%;
+      background: var(--success); box-shadow: 0 0 16px var(--success);
+      flex-shrink: 0;
+    }
+    .status-pulse.disconnected {
+      background: var(--danger); box-shadow: 0 0 16px var(--danger);
+    }
+    .status-title { font-size: 18px; font-weight: 700; color: #fff; }
+    .status-subtitle { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+
+    /* Compact 4-box metrics row */
+    .metric-grid-4 {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      margin-top: 16px;
+    }
+    @media (max-width: 768px) {
+      .metric-grid-4 { grid-template-columns: repeat(2, 1fr); }
+    }
+    .metric-pill {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 12px;
+      padding: 10px 14px;
+    }
+    .metric-pill .lbl {
+      font-size: 11px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    .metric-pill .val {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    /* Service Cards (Overview) */
+    .service-card {
       background: rgba(255, 255, 255, 0.02);
       border: 1px solid rgba(255, 255, 255, 0.06);
-      border-radius: 16px;
-      padding: 20px;
+      border-radius: var(--radius-md);
+      padding: 16px;
       display: flex;
       flex-direction: column;
       justify-content: space-between;
+      gap: 12px;
       transition: all 0.2s;
     }
-    .metric-card:hover {
+    .service-card:hover {
       background: rgba(255, 255, 255, 0.04);
       border-color: rgba(255, 255, 255, 0.12);
       transform: translateY(-2px);
     }
-    .metric-header {
+    .service-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 10px;
     }
-    .metric-title {
+    .service-title {
       font-size: 14px;
       font-weight: 700;
-      color: var(--text);
+      color: #fff;
       display: flex;
       align-items: center;
       gap: 6px;
     }
+
+    /* Badges */
     .badge-status {
       font-size: 11px;
       font-weight: 700;
-      padding: 3px 8px;
-      border-radius: 12px;
+      padding: 2px 8px;
+      border-radius: 10px;
       display: inline-flex;
       align-items: center;
       gap: 4px;
@@ -1061,20 +1185,22 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
       color: var(--text-muted);
       border: 1px solid rgba(255, 255, 255, 0.1);
     }
+
+    /* Chips */
     .quick-chips {
       display: flex;
       flex-wrap: wrap;
       gap: 6px;
-      margin-top: 10px;
+      margin-top: 8px;
     }
     .chip-btn {
-      background: rgba(255, 255, 255, 0.06);
-      border: 1px solid rgba(255, 255, 255, 0.1);
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.08);
       color: var(--text);
       font-size: 11px;
       font-weight: 600;
-      padding: 5px 10px;
-      border-radius: 8px;
+      padding: 4px 10px;
+      border-radius: 6px;
       cursor: pointer;
       transition: all 0.15s;
     }
@@ -1083,83 +1209,78 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
       border-color: var(--primary);
     }
 
-    .status-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-    .status-indicator { display: flex; align-items: center; gap: 12px; }
-
-    .status-pulse {
-      width: 14px; height: 14px; border-radius: 50%;
-      background: var(--success); box-shadow: 0 0 16px var(--success);
+    /* Control Items */
+    .control-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
     }
-
-    .status-pulse.disconnected { background: var(--danger); box-shadow: 0 0 16px var(--danger); }
-    .status-title { font-size: 18px; font-weight: 700; }
-    .status-subtitle { font-size: 13px; color: var(--text-muted); }
-
-    .stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 18px; }
-
-    .stat-box {
-      background: rgba(255, 255, 255, 0.03);
-      border: 1px solid rgba(255, 255, 255, 0.05);
-      border-radius: 12px; padding: 12px 14px;
-    }
-
-    .stat-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); margin-bottom: 4px; }
-    .stat-value { font-family: 'JetBrains Mono', monospace; font-size: 15px; font-weight: 600; color: var(--text); }
-
-    .control-item { display: flex; justify-content: space-between; align-items: center; padding: 14px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.05); }
-    .control-item:last-child { border-bottom: none; padding-bottom: 0; }
-    .control-info h4 { font-size: 14px; font-weight: 600; margin-bottom: 3px; }
+    .control-item:last-child { border-bottom: none; }
+    .control-info h4 { font-size: 14px; font-weight: 600; margin-bottom: 2px; }
     .control-info p { font-size: 12px; color: var(--text-muted); }
 
-    .switch { position: relative; display: inline-block; width: 48px; height: 26px; }
+    /* Switches */
+    .switch { position: relative; display: inline-block; width: 44px; height: 24px; flex-shrink: 0; }
     .switch input { opacity: 0; width: 0; height: 0; }
     .slider {
-      position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
+      position: absolute; cursor: pointer; inset: 0;
       background-color: rgba(255, 255, 255, 0.15);
-      transition: .3s cubic-bezier(0.4, 0, 0.2, 1);
-      border-radius: 34px;
+      transition: .25s ease;
+      border-radius: 24px;
     }
     .slider:before {
-      position: absolute; content: ""; height: 20px; width: 20px; left: 3px; bottom: 3px;
-      background-color: white; transition: .3s cubic-bezier(0.4, 0, 0.2, 1);
+      position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px;
+      background-color: white; transition: .25s ease;
       border-radius: 50%;
     }
-    input:checked + .slider { background-color: var(--primary); box-shadow: 0 0 12px var(--primary-glow); }
-    input:checked + .slider:before { transform: translateX(22px); }
+    input:checked + .slider { background-color: var(--primary); box-shadow: 0 0 10px var(--primary-glow); }
+    input:checked + .slider:before { transform: translateX(20px); }
 
+    /* Buttons */
     .btn {
-      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-      font-size: 13px; font-weight: 600; padding: 9px 15px; border-radius: 10px;
-      border: none; cursor: pointer; transition: all 0.2s;
+      display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+      font-size: 13px; font-weight: 600; padding: 8px 16px; border-radius: 10px;
+      border: none; cursor: pointer; transition: all 0.15s; white-space: nowrap;
     }
-    .btn-primary { background: var(--primary); color: white; box-shadow: 0 4px 16px var(--primary-glow); }
+    .btn-primary { background: var(--primary); color: white; box-shadow: 0 4px 14px var(--primary-glow); }
     .btn-primary:hover { background: var(--primary-hover); transform: translateY(-1px); }
-    .btn-secondary { background: rgba(255, 255, 255, 0.08); color: var(--text); border: 1px solid rgba(255, 255, 255, 0.1); }
-    .btn-secondary:hover { background: rgba(255, 255, 255, 0.14); }
+    .btn-secondary { background: rgba(255, 255, 255, 0.07); color: var(--text); border: 1px solid rgba(255, 255, 255, 0.1); }
+    .btn-secondary:hover { background: rgba(255, 255, 255, 0.12); }
     .btn-danger { background: rgba(239, 68, 68, 0.15); color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.3); }
     .btn-danger:hover { background: rgba(239, 68, 68, 0.25); }
-    .btn-sm { padding: 6px 12px; font-size: 12px; }
+    .btn-sm { padding: 5px 11px; font-size: 12px; border-radius: 8px; }
 
+    /* Form Inputs */
+    .input-style {
+      width: 100%; box-sizing: border-box; background: rgba(0, 0, 0, 0.35);
+      border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 8px;
+      padding: 9px 12px; color: white; font-size: 13px; outline: none;
+      transition: border-color 0.15s;
+    }
+    .input-style:focus { border-color: var(--primary); }
     .select-style {
-      background: rgba(0, 0, 0, 0.4);
-      border: 1px solid rgba(255, 255, 255, 0.15);
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid rgba(255, 255, 255, 0.12);
       color: var(--text);
-      padding: 7px 12px;
+      padding: 8px 12px;
       border-radius: 8px;
       font-size: 12px;
       outline: none;
-      width: 100%;
       cursor: pointer;
     }
-    .select-style option { background: #111827; color: white; }
+    .select-style option { background: #0f172a; color: white; }
 
-    .speed-gauge { text-align: center; padding: 12px 0; }
-    .speed-number { font-family: 'JetBrains Mono', monospace; font-size: 36px; font-weight: 800; color: var(--accent); }
+    /* Speed Gauge */
+    .speed-gauge { text-align: center; padding: 14px 0 6px; }
+    .speed-number { font-family: 'JetBrains Mono', monospace; font-size: 44px; font-weight: 800; color: var(--accent); }
 
+    /* Benchmark Table */
     .benchmark-table {
       width: 100%;
       border-collapse: collapse;
-      margin-top: 14px;
+      margin-top: 10px;
       font-size: 12px;
     }
     .benchmark-table th {
@@ -1167,30 +1288,63 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
       border-bottom: 1px solid rgba(255, 255, 255, 0.08);
       font-weight: 600; text-transform: uppercase; font-size: 11px;
     }
-    .benchmark-table td { padding: 9px 10px; border-bottom: 1px solid rgba(255, 255, 255, 0.04); }
+    .benchmark-table td { padding: 8px 10px; border-bottom: 1px solid rgba(255, 255, 255, 0.04); }
     .benchmark-table tr:last-child td { border-bottom: none; }
 
-    .terminal-box {
-      background: #04070d; border: 1px solid rgba(255, 255, 255, 0.06);
-      border-radius: 12px; padding: 16px;
-      font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #94a3b8;
-      max-height: 180px; overflow-y: auto; white-space: pre-wrap; line-height: 1.6;
+    /* DC Grid */
+    .dc-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+    @media (max-width: 768px) {
+      .dc-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    .dc-card {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 12px;
+      padding: 12px;
+      cursor: pointer;
+      transition: all 0.15s;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .dc-card:hover {
+      background: rgba(255, 255, 255, 0.07);
+      border-color: var(--primary);
+      transform: translateY(-1px);
+    }
+    .dc-card.active {
+      border-color: var(--primary);
+      background: rgba(246, 130, 31, 0.1);
     }
 
+    /* Code Snippet */
     .code-snippet {
-      background: rgba(0, 0, 0, 0.35); border: 1px solid rgba(255, 255, 255, 0.08);
-      border-radius: 10px; padding: 12px 14px;
+      background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 8px; padding: 10px 12px;
       font-family: 'JetBrains Mono', monospace; font-size: 12px;
-      display: flex; justify-content: space-between; align-items: center; margin-top: 8px;
+      display: flex; justify-content: space-between; align-items: center; margin-top: 6px;
     }
     .code-snippet code { color: var(--accent); overflow-x: auto; }
 
+    /* Terminal Box */
+    .terminal-box {
+      background: #03060c; border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: var(--radius-md); padding: 14px;
+      font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #94a3b8;
+      max-height: 240px; overflow-y: auto; white-space: pre-wrap; line-height: 1.5;
+    }
+
     #toast {
-      position: fixed; bottom: 24px; right: 24px;
-      background: #1e293b; border: 1px solid rgba(255, 255, 255, 0.1);
-      color: white; padding: 12px 20px; border-radius: 12px;
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
-      display: none; align-items: center; gap: 10px;
+      position: fixed; bottom: 20px; right: 20px;
+      background: #1e293b; border: 1px solid rgba(255, 255, 255, 0.12);
+      color: white; padding: 10px 18px; border-radius: 10px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+      display: none; align-items: center; gap: 8px;
       font-size: 13px; font-weight: 500; z-index: 999;
     }
 
@@ -1201,27 +1355,20 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     }
     .modal-card {
       background: #0f172a; border: 1px solid rgba(255, 255, 255, 0.12);
-      border-radius: 16px; padding: 24px; width: 90%; max-width: 420px;
+      border-radius: 16px; padding: 24px; width: 90%; max-width: 400px;
       box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
     }
     .modal-header {
-      display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px;
+      display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;
     }
     .modal-header h3 { font-size: 16px; font-weight: 700; color: white; margin: 0; }
     .modal-close {
-      background: none; border: none; font-size: 24px; color: var(--text-muted);
+      background: none; border: none; font-size: 22px; color: var(--text-muted);
       cursor: pointer; line-height: 1; padding: 0 4px;
     }
     .modal-close:hover { color: white; }
-    .input-style {
-      width: 100%; box-sizing: border-box; background: rgba(0, 0, 0, 0.4);
-      border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 8px;
-      padding: 10px 14px; color: white; font-size: 13px; outline: none;
-      transition: border-color 0.2s;
-    }
-    .input-style:focus { border-color: var(--primary); }
     .modal-alert {
-      padding: 10px 14px; border-radius: 8px; font-size: 12px; margin-bottom: 14px; display: none;
+      padding: 9px 12px; border-radius: 8px; font-size: 12px; margin-bottom: 12px; display: none;
     }
     .modal-alert-error { background: rgba(239, 68, 68, 0.15); color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.3); }
     .modal-alert-success { background: rgba(16, 185, 129, 0.15); color: #6ee7b7; border: 1px solid rgba(16, 185, 129, 0.3); }
@@ -1236,14 +1383,17 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         <svg viewBox="0 0 24 24"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM19 18H6c-2.21 0-4-1.79-4-4 0-2.05 1.53-3.76 3.56-3.97l1.07-.11.5-.95C8.08 7.14 9.94 6 12 6c2.62 0 4.88 1.86 5.39 4.43l.3 1.5 1.53.11c1.56.1 2.78 1.41 2.78 2.96 0 1.65-1.35 3-3 3z"/></svg>
       </div>
       <div class="brand-text">
-        <h1>Cloudflare WARP Control Center</h1>
-        <p>Bảng điều khiển & Tối ưu hóa SOCKS5 Proxy cho Máy chủ Data Center</p>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <h1>Cloudflare WARP</h1>
+          <span class="version-chip">Data Center Pro</span>
+        </div>
+        <p>SOCKS5 & HTTP Proxy Control Center</p>
       </div>
     </div>
     <div class="header-actions">
       <div class="badge-mode">
         <div class="dot"></div>
-        Proxy Mode (SOCKS5)
+        <span>Port :40000 / :8118</span>
       </div>
       <button onclick="openChangePasswordModal()" class="btn btn-secondary btn-sm" title="Đổi mật khẩu Web Dashboard">
         🔑 Đổi mật khẩu
@@ -1257,13 +1407,13 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
   <!-- Navigation Tabs Bar -->
   <nav class="tabs-bar">
     <button class="tab-btn active" onclick="switchTab('overview')" id="tabBtn-overview">
-      <span>📊</span> <span>Tổng quan & Kết nối</span>
+      <span>📊</span> <span>Tổng quan</span>
     </button>
     <button class="tab-btn" onclick="switchTab('speedtest')" id="tabBtn-speedtest">
-      <span>⚡</span> <span>Đo kiểm Tốc độ</span>
+      <span>⚡</span> <span>Đo Tốc Độ</span>
     </button>
     <button class="tab-btn" onclick="switchTab('routing')" id="tabBtn-routing">
-      <span>🔀</span> <span>Điều hướng Proxy</span>
+      <span>🔀</span> <span>Điều Hướng</span>
     </button>
     <button class="tab-btn" onclick="switchTab('docker')" id="tabBtn-docker">
       <span>🐳</span> <span>Docker & Build</span>
@@ -1275,7 +1425,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
       <span>🦊</span> <span>GitLab CI/CD</span>
     </button>
     <button class="tab-btn" onclick="switchTab('logs')" id="tabBtn-logs">
-      <span>📋</span> <span>Nhật ký & Chẩn đoán</span>
+      <span>📋</span> <span>Logs</span>
     </button>
   </nav>
 
@@ -1284,119 +1434,118 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     <div class="dashboard-grid">
       <!-- Hero Status Card (col-12) -->
       <div class="card col-12">
-        <div class="status-header">
-          <div class="status-indicator">
+        <div class="hero-box">
+          <div class="hero-info">
             <div id="statusDot" class="status-pulse"></div>
             <div>
               <div id="statusText" class="status-title">Đang tải trạng thái...</div>
               <div id="statusSub" class="status-subtitle">Kiểm tra kết nối dịch vụ Cloudflare Anycast</div>
             </div>
           </div>
-          <button id="toggleBtn" onclick="toggleWarp()" class="btn btn-primary">
+          <button id="toggleBtn" onclick="toggleWarp()" class="btn btn-primary" style="padding: 10px 22px; font-size: 14px;">
             <span id="btnIcon">⚡</span> <span id="btnText">Ngắt kết nối</span>
           </button>
         </div>
 
-        <div class="stats-row" style="grid-template-columns: repeat(4, 1fr);">
-          <div class="stat-box">
-            <div class="stat-label">Trạm Anycast PoP</div>
-            <div id="coloValue" class="stat-value">--</div>
+        <div class="metric-grid-4">
+          <div class="metric-pill">
+            <div class="lbl">Trạm Anycast PoP</div>
+            <div id="coloValue" class="val">--</div>
           </div>
-          <div class="stat-box">
-            <div class="stat-label">Cổng SOCKS5 Local</div>
-            <div id="portValue" class="stat-value">127.0.0.1:40000</div>
+          <div class="metric-pill">
+            <div class="lbl">Cổng SOCKS5 Local</div>
+            <div id="portValue" class="val">127.0.0.1:40000</div>
           </div>
-          <div class="stat-box">
-            <div class="stat-label">Egress IP Public</div>
-            <div id="ipValue" class="stat-value" style="font-size: 13px;">--</div>
+          <div class="metric-pill">
+            <div class="lbl">Egress Public IP</div>
+            <div id="ipValue" class="val" style="font-size: 13px;">--</div>
           </div>
-          <div class="stat-box">
-            <div class="stat-label">Chế độ Proxy</div>
-            <div class="stat-value" style="color: var(--success); font-size: 13px;">SOCKS5 (Safe for SSH)</div>
+          <div class="metric-pill">
+            <div class="lbl">Nguồn Egress</div>
+            <div id="resCurrentEgressMini" class="val" style="color: var(--success); font-size: 13px;">SOCKS5 (WARP)</div>
           </div>
         </div>
       </div>
 
       <!-- Quick Action Cards (4 x col-3) -->
-      <div class="card col-3 metric-card">
+      <div class="card col-3 service-card">
         <div>
-          <div class="metric-header">
-            <span class="metric-title">🐳 Docker Proxy</span>
-            <span id="ovDockerBadge" class="badge-status inactive">○ Đang kiểm tra...</span>
+          <div class="service-header">
+            <span class="service-title">🐳 Docker Proxy</span>
+            <span id="ovDockerBadge" class="badge-status inactive">○ Đang tắt</span>
           </div>
-          <p style="font-size: 12px; color: var(--text-muted); margin: 0 0 14px 0; line-height: 1.5;">
-            Cấu hình daemon proxy, reload daemon không gián đoạn, và chạy lệnh docker build trực tiếp.
-          </p>
+          <p style="font-size: 12px; color: var(--text-muted); margin-top: 6px;">Kéo Registry quốc tế qua WARP, giữ nguyên tốc độ Docker Hub.</p>
         </div>
         <button onclick="switchTab('docker')" class="btn btn-primary btn-sm" style="width: 100%;">
           Docker Console ➔
         </button>
       </div>
 
-      <div class="card col-3 metric-card">
+      <div class="card col-3 service-card">
         <div>
-          <div class="metric-header">
-            <span class="metric-title">🏡 Proxy Dân Cư</span>
+          <div class="service-header">
+            <span class="service-title">🏡 Proxy Dân Cư</span>
             <span id="ovResProxyBadge" class="badge-status inactive">○ Đang kiểm tra...</span>
           </div>
-          <p style="font-size: 12px; color: var(--text-muted); margin: 0 0 14px 0; line-height: 1.5;">
-            Kết nối upstream proxy dân cư / private IP sạch, tốc độ tải vượt trội và chống chặn.
-          </p>
+          <p style="font-size: 12px; color: var(--text-muted); margin-top: 6px;">Kết nối upstream proxy IP sạch dân cư, băng thông cao.</p>
         </div>
         <button onclick="switchTab('residential')" class="btn btn-secondary btn-sm" style="width: 100%;">
-          Proxy Dân Cư ➔
+          Cấu hình Proxy ➔
         </button>
       </div>
 
-      <div class="card col-3 metric-card">
+      <div class="card col-3 service-card">
         <div>
-          <div class="metric-header">
-            <span class="metric-title">🐙 Git & GitLab CLI</span>
-            <span id="ovGitBadge" class="badge-status inactive">○ Đang kiểm tra...</span>
+          <div class="service-header">
+            <span class="service-title">🐙 Git & GitLab CLI</span>
+            <span id="ovGitBadge" class="badge-status inactive">○ Đang tắt</span>
           </div>
-          <p style="font-size: 12px; color: var(--text-muted); margin: 0 0 14px 0; line-height: 1.5;">
-            Chỉ định tuyến riêng git clone/push của GitHub & GitLab đi qua Proxy, không ảnh hưởng Git nội bộ.
-          </p>
+          <p style="font-size: 12px; color: var(--text-muted); margin-top: 6px;">Điều hướng git clone/push của GitHub & GitLab qua Proxy.</p>
         </div>
         <button onclick="switchTab('routing')" class="btn btn-secondary btn-sm" style="width: 100%;">
-          Cấu hình Git ➔
+          Điều Hướng ➔
         </button>
       </div>
 
-      <div class="card col-3 metric-card">
+      <div class="card col-3 service-card">
         <div>
-          <div class="metric-header">
-            <span class="metric-title">⚡ Đo Tốc Độ Mạng</span>
-            <span class="badge-status active">8 Trạm Toàn Cầu</span>
+          <div class="service-header">
+            <span class="service-title">⚡ Đo Tốc Độ Mạng</span>
+            <span class="badge-status active">8 Trạm Anycast</span>
           </div>
-          <p style="font-size: 12px; color: var(--text-muted); margin: 0 0 14px 0; line-height: 1.5;">
-            Kiểm tra băng thông và độ trễ đến Singapore, Nhật Bản, Đức, Mỹ, Anh, Phần Lan.
-          </p>
+          <p style="font-size: 12px; color: var(--text-muted); margin-top: 6px;">Kiểm tra băng thông và độ trễ tới Singapore, Nhật, Đức, Mỹ.</p>
         </div>
         <button onclick="switchTab('speedtest')" class="btn btn-secondary btn-sm" style="width: 100%;">
-          Kiểm tra tốc độ ➔
+          Đo Tốc Độ ➔
         </button>
       </div>
 
-      <!-- Quick Commands Card (col-12) -->
-      <div class="card col-12">
-        <h3 style="font-size: 15px; font-weight: 700; margin-bottom: 12px;">📌 Lệnh Dòng Lệnh Nhanh (Terminal CheatSheet)</h3>
-        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px;">
-          <div>
-            <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 6px;">Kiểm tra đường truyền cURL qua SOCKS5:</div>
-            <div class="code-snippet">
-              <code id="quickCurlCmd">curl --socks5-hostname 127.0.0.1:40000 https://cloudflare.com/cdn-cgi/trace</code>
-              <button onclick="copyToClipboard(document.getElementById('quickCurlCmd').innerText)" class="btn btn-secondary btn-sm">Copy</button>
+      <!-- Collapsible Terminal Cheatsheet -->
+      <div class="col-12" style="margin-top: -6px;">
+        <details class="clean-accordion">
+          <summary>
+            <span>💡 Xem câu lệnh cURL & Export biến môi trường Terminal</span>
+            <span style="font-size: 11px; color: var(--accent);">Nhấn để mở/đóng ▾</span>
+          </summary>
+          <div class="clean-accordion-body">
+            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;">
+              <div>
+                <span style="font-size: 11px; color: var(--text-muted);">Kiểm tra đường truyền cURL:</span>
+                <div class="code-snippet">
+                  <code id="quickCurlCmd">curl --socks5-hostname 127.0.0.1:40000 https://cloudflare.com/cdn-cgi/trace</code>
+                  <button onclick="copyToClipboard(document.getElementById('quickCurlCmd').innerText)" class="btn btn-secondary btn-sm">Copy</button>
+                </div>
+              </div>
+              <div>
+                <span style="font-size: 11px; color: var(--text-muted);">Biến môi trường toàn phiên terminal:</span>
+                <div class="code-snippet">
+                  <code id="quickExportCmd">export all_proxy="socks5://127.0.0.1:40000"</code>
+                  <button onclick="copyToClipboard(document.getElementById('quickExportCmd').innerText)" class="btn btn-secondary btn-sm">Copy</button>
+                </div>
+              </div>
             </div>
           </div>
-          <div>
-            <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 6px;">Bật proxy tạm thời cho phiên Terminal / CI-CD:</div>
-            <div class="code-snippet">
-              <code id="quickExportCmd">export all_proxy="socks5://127.0.0.1:40000"</code>
-              <button onclick="copyToClipboard(document.getElementById('quickExportCmd').innerText)" class="btn btn-secondary btn-sm">Copy</button>
-            </div>
-          </div>
-        </div>
+        </details>
       </div>
     </div>
   </div>
@@ -1405,67 +1554,105 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
   <div class="tab-pane" id="tab-speedtest">
     <div class="dashboard-grid">
       <div class="card col-12">
-        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 18px; flex-wrap: wrap; gap: 12px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 12px;">
           <div>
-            <h3 style="font-size: 17px; font-weight: 700; margin: 0 0 6px 0;">⚡ Đo Kiểm Tốc Độ Mạng Đa Quốc Gia Qua WARP SOCKS5</h3>
-            <p style="font-size: 13px; color: var(--text-muted); margin: 0;">
-              Đo kiểm tốc độ tải thực tế và độ trễ từ máy chủ của bạn đến các trạm Cloud Data Center lớn trên thế giới.
-            </p>
+            <h3 style="font-size: 17px; font-weight: 700; margin: 0 0 4px 0;">⚡ Đo Kiểm Tốc Độ Mạng Đa Quốc Gia</h3>
+            <p style="font-size: 12px; color: var(--text-muted); margin: 0;">Kiểm tra băng thông tải thực tế qua Cloudflare Anycast tới 8 Data Center lớn.</p>
           </div>
-          <div class="badge-mode" style="background: rgba(249, 115, 22, 0.12); border-color: rgba(249, 115, 22, 0.3); color: var(--accent);">
-            <span>8 Trạm Anycast Quốc Tế</span>
+          <button onclick="selectAndRunSpeed('ALL')" id="testSpeedBtn" class="btn btn-primary" style="padding: 8px 18px; font-size: 13px;">
+            🚀 Đo Toàn Bộ 8 Trạm (Benchmark All)
+          </button>
+        </div>
+
+        <!-- 8 Data Center Cards Grid -->
+        <div class="dc-grid">
+          <div class="dc-card" onclick="selectAndRunSpeed('SG_SIN')">
+            <div>
+              <div style="font-size: 13px; font-weight: 700;">🇸🇬 Singapore</div>
+              <div style="font-size: 11px; color: var(--text-muted);">Hetzner DC</div>
+            </div>
+            <button class="btn btn-secondary btn-sm" style="padding: 3px 8px; font-size: 11px;">Đo</button>
+          </div>
+          <div class="dc-card" onclick="selectAndRunSpeed('JP_TYO')">
+            <div>
+              <div style="font-size: 13px; font-weight: 700;">🇯🇵 Tokyo</div>
+              <div style="font-size: 11px; color: var(--text-muted);">Linode DC</div>
+            </div>
+            <button class="btn btn-secondary btn-sm" style="padding: 3px 8px; font-size: 11px;">Đo</button>
+          </div>
+          <div class="dc-card" onclick="selectAndRunSpeed('DE_FSN')">
+            <div>
+              <div style="font-size: 13px; font-weight: 700;">🇩🇪 Đức (FSN)</div>
+              <div style="font-size: 11px; color: var(--text-muted);">Falkenstein</div>
+            </div>
+            <button class="btn btn-secondary btn-sm" style="padding: 3px 8px; font-size: 11px;">Đo</button>
+          </div>
+          <div class="dc-card" onclick="selectAndRunSpeed('DE_NBG')">
+            <div>
+              <div style="font-size: 13px; font-weight: 700;">🇩🇪 Đức (NBG)</div>
+              <div style="font-size: 11px; color: var(--text-muted);">Nuremberg</div>
+            </div>
+            <button class="btn btn-secondary btn-sm" style="padding: 3px 8px; font-size: 11px;">Đo</button>
+          </div>
+          <div class="dc-card" onclick="selectAndRunSpeed('US_ASH')">
+            <div>
+              <div style="font-size: 13px; font-weight: 700;">🇺🇸 Mỹ (Bờ Đông)</div>
+              <div style="font-size: 11px; color: var(--text-muted);">Ashburn VA</div>
+            </div>
+            <button class="btn btn-secondary btn-sm" style="padding: 3px 8px; font-size: 11px;">Đo</button>
+          </div>
+          <div class="dc-card" onclick="selectAndRunSpeed('US_HIL')">
+            <div>
+              <div style="font-size: 13px; font-weight: 700;">🇺🇸 Mỹ (Bờ Tây)</div>
+              <div style="font-size: 11px; color: var(--text-muted);">Hillsboro OR</div>
+            </div>
+            <button class="btn btn-secondary btn-sm" style="padding: 3px 8px; font-size: 11px;">Đo</button>
+          </div>
+          <div class="dc-card" onclick="selectAndRunSpeed('UK_LON')">
+            <div>
+              <div style="font-size: 13px; font-weight: 700;">🇬🇧 London</div>
+              <div style="font-size: 11px; color: var(--text-muted);">Anh Quốc</div>
+            </div>
+            <button class="btn btn-secondary btn-sm" style="padding: 3px 8px; font-size: 11px;">Đo</button>
+          </div>
+          <div class="dc-card" onclick="selectAndRunSpeed('FI_HEL')">
+            <div>
+              <div style="font-size: 13px; font-weight: 700;">🇫🇮 Phần Lan</div>
+              <div style="font-size: 11px; color: var(--text-muted);">Helsinki</div>
+            </div>
+            <button class="btn btn-secondary btn-sm" style="padding: 3px 8px; font-size: 11px;">Đo</button>
           </div>
         </div>
 
-        <div style="background: rgba(0, 0, 0, 0.25); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 14px; padding: 18px; margin-bottom: 20px;">
-          <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
-            <div style="flex: 1; min-width: 260px;">
-              <label style="font-size: 12px; color: var(--text-muted); display: block; margin-bottom: 6px;">Chọn Data Center muốn đo kiểm:</label>
-              <select id="regionSelect" class="select-style" style="font-size: 13px; padding: 10px 14px;">
-                <option value="SG_SIN">🇸🇬 Singapore (Hetzner DC)</option>
-                <option value="JP_TYO">🇯🇵 Nhật Bản (Tokyo, Linode)</option>
-                <option value="DE_FSN" selected>🇩🇪 Đức (Falkenstein, Hetzner)</option>
-                <option value="DE_NBG">🇩🇪 Đức (Nuremberg, Hetzner)</option>
-                <option value="US_ASH">🇺🇸 Mỹ - Bờ Đông (Ashburn, Hetzner)</option>
-                <option value="US_HIL">🇺🇸 Mỹ - Bờ Tây (Hillsboro, Hetzner)</option>
-                <option value="UK_LON">🇬🇧 Anh Quốc (London, Linode)</option>
-                <option value="FI_HEL">🇫🇮 Phần Lan (Helsinki, Hetzner)</option>
-                <option value="ALL">🚀 Đo TOÀN BỘ các Data Center (Benchmark All)</option>
-              </select>
-            </div>
-            <div style="align-self: flex-end;">
-              <button onclick="runSpeedTest()" id="testSpeedBtn" class="btn btn-primary" style="padding: 10px 24px; font-size: 14px;">
-                ▶ Bắt đầu kiểm tra tốc độ
-              </button>
-            </div>
-          </div>
+        <!-- Hidden Select for JS Compatibility -->
+        <select id="regionSelect" style="display: none;">
+          <option value="SG_SIN">Singapore</option>
+          <option value="JP_TYO">Tokyo</option>
+          <option value="DE_FSN">DE_FSN</option>
+          <option value="DE_NBG">DE_NBG</option>
+          <option value="US_ASH">US_ASH</option>
+          <option value="US_HIL">US_HIL</option>
+          <option value="UK_LON">UK_LON</option>
+          <option value="FI_HEL">FI_HEL</option>
+          <option value="ALL">ALL</option>
+        </select>
 
-          <div class="quick-chips">
-            <span style="font-size: 12px; color: var(--text-muted); align-self: center; margin-right: 4px;">Chọn nhanh:</span>
-            <button type="button" onclick="selectAndRunSpeed('SG_SIN')" class="chip-btn">🇸🇬 Singapore</button>
-            <button type="button" onclick="selectAndRunSpeed('JP_TYO')" class="chip-btn">🇯🇵 Nhật Bản</button>
-            <button type="button" onclick="selectAndRunSpeed('DE_FSN')" class="chip-btn">🇩🇪 Đức (FSN)</button>
-            <button type="button" onclick="selectAndRunSpeed('US_ASH')" class="chip-btn">🇺🇸 Mỹ (Ashburn)</button>
-            <button type="button" onclick="selectAndRunSpeed('ALL')" class="chip-btn" style="background: rgba(249, 115, 22, 0.15); border-color: rgba(249, 115, 22, 0.4); color: #fdba74;">🚀 Benchmark All</button>
-          </div>
-        </div>
-
-        <!-- Single Result Box -->
-        <div id="singleResultBox" style="background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 14px; padding: 24px; text-align: center;">
+        <!-- Speed Gauge Result Box -->
+        <div id="singleResultBox" style="background: rgba(0, 0, 0, 0.25); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 14px; padding: 20px; text-align: center;">
           <div class="speed-gauge">
-            <div id="speedResult" class="speed-number" style="font-size: 48px;">--</div>
-            <div id="speedUnit" style="font-size: 14px; color: var(--text-muted); font-weight: 600; text-transform: uppercase;">MB/s</div>
+            <div id="speedResult" class="speed-number">--</div>
+            <div id="speedUnit" style="font-size: 13px; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">MB/s</div>
           </div>
-          <div id="speedDetail" style="font-size: 13px; color: var(--text-muted); margin-top: 6px;">
-            Chọn trạm kiểm tra và bấm "Bắt đầu kiểm tra tốc độ"
+          <div id="speedDetail" style="font-size: 13px; color: var(--text-muted); margin-top: 4px;">
+            Nhấp vào bất kỳ Data Center nào ở trên để kiểm tra tốc độ
           </div>
         </div>
 
-        <!-- All Results Table Box -->
-        <div id="allResultsBox" style="display: none; background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 14px; padding: 20px;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
-            <h4 style="font-size: 15px; font-weight: 700; margin: 0;">Bảng Tổng Hợp Benchmark 8 Data Center Quốc Tế</h4>
-            <span style="font-size: 12px; color: var(--text-muted);">Đường truyền: Cloudflare WARP SOCKS5</span>
+        <!-- Benchmark Table Box -->
+        <div id="allResultsBox" style="display: none; background: rgba(0, 0, 0, 0.25); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 14px; padding: 18px; margin-top: 14px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+            <h4 style="font-size: 14px; font-weight: 700; margin: 0;">Bảng Tổng Hợp Benchmark 8 Data Center</h4>
+            <span style="font-size: 11px; color: var(--accent);">Cloudflare WARP Anycast</span>
           </div>
           <div style="overflow-x: auto;">
             <table class="benchmark-table">
@@ -1488,17 +1675,17 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
   <!-- TAB 3: ĐIỀU HƯỚNG PROXY -->
   <div class="tab-pane" id="tab-routing">
     <div class="dashboard-grid">
-      <!-- Smart Routing Card (col-12) -->
+      <!-- Routing Switches Card (col-12) -->
       <div class="card col-12">
-        <h3 style="font-size: 17px; font-weight: 700; margin-bottom: 6px;">🔀 Cấu hình Điều hướng Thông minh (Smart Routing)</h3>
-        <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 18px;">
-          Chỉ định tuyến riêng các ứng dụng và dịch vụ chỉ định đi qua WARP SOCKS5 mà không làm ảnh hưởng hay làm chậm lưu lượng nội bộ của máy chủ.
+        <h3 style="font-size: 17px; font-weight: 700; margin-bottom: 4px;">🔀 Điều Hướng Dịch Vụ Thông Minh</h3>
+        <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 16px;">
+          Chỉ định tuyến riêng các kết nối quốc tế qua WARP Proxy, giữ nguyên tốc độ mạng nội bộ.
         </p>
 
         <div class="control-item">
           <div class="control-info">
-            <h4>Proxy cho Docker Daemon (Kèm NO_PROXY Docker Hub)</h4>
-            <p>Tự động cấu hình daemon để kéo các registry quốc tế (ghcr.io, quay.io, gcr.io) qua WARP, giữ nguyên tốc độ kéo trực tiếp Docker Hub (~200 Mbps). <a href="javascript:void(0)" onclick="switchTab('docker')" style="color:var(--accent); text-decoration:none; font-weight:600;">Mở Tab Docker & Build Console ➔</a></p>
+            <h4>Docker Daemon Proxy</h4>
+            <p>Kéo image quốc tế (ghcr.io, quay.io, gcr.io) qua WARP, giữ nguyên tốc độ Docker Hub.</p>
           </div>
           <label class="switch">
             <input type="checkbox" id="dockerSwitch" onchange="toggleDockerProxy()">
@@ -1508,8 +1695,8 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 
         <div class="control-item">
           <div class="control-info">
-            <h4>Tăng tốc Git CLI cho GitHub (https://github.com/)</h4>
-            <p>Chỉ định tuyến riêng git clone/push/fetch của GitHub đi qua WARP SOCKS5, không ảnh hưởng Git nội bộ.</p>
+            <h4>Tăng tốc Git CLI cho GitHub (github.com)</h4>
+            <p>Định tuyến riêng git clone/push/fetch của GitHub đi qua WARP SOCKS5.</p>
           </div>
           <label class="switch">
             <input type="checkbox" id="gitSwitch" onchange="toggleGitProxy()">
@@ -1519,8 +1706,8 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 
         <div class="control-item">
           <div class="control-info">
-            <h4>Tăng tốc Git CLI cho GitLab (https://gitlab.com/)</h4>
-            <p>Chỉ định tuyến riêng git clone/fetch của GitLab quốc tế qua WARP SOCKS5.</p>
+            <h4>Tăng tốc Git CLI cho GitLab (gitlab.com)</h4>
+            <p>Định tuyến riêng git clone/fetch của GitLab quốc tế qua WARP SOCKS5.</p>
           </div>
           <label class="switch">
             <input type="checkbox" id="gitlabSwitch" onchange="toggleGitLabProxy()">
@@ -1531,479 +1718,424 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 
       <!-- SOCKS5 Port Changer (col-6) -->
       <div class="card col-6">
-        <h3 style="font-size: 15px; font-weight: 700; margin-bottom: 8px;">⚙️ Đổi Cổng SOCKS5 Proxy</h3>
-        <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 14px;">
-          Mặc định là <strong>40000</strong>. Bạn có thể đổi sang bất kỳ cổng nào từ 1024 đến 65535 nếu máy chủ bị xung đột cổng.
+        <h3 style="font-size: 15px; font-weight: 700; margin-bottom: 6px;">⚙️ Cổng SOCKS5 Proxy</h3>
+        <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">
+          Mặc định là <strong>40000</strong>. Đổi cổng nếu máy chủ bị xung đột:
         </p>
-        <div style="display: flex; gap: 10px; align-items: center;">
-          <input type="number" id="customPortInput" class="input-style" style="width: 140px; font-family: 'JetBrains Mono', monospace;" value="40000" min="1024" max="65535">
-          <button onclick="saveCustomPort()" class="btn btn-primary btn-sm">Lưu cổng mới</button>
+        <div style="display: flex; gap: 8px; align-items: center;">
+          <input type="number" id="customPortInput" class="input-style" style="width: 130px; font-family: 'JetBrains Mono', monospace;" value="40000" min="1024" max="65535">
+          <button onclick="saveCustomPort()" class="btn btn-primary btn-sm">Lưu cổng</button>
         </div>
       </div>
 
-      <!-- Privoxy Forwarder Info (col-6) -->
+      <!-- HTTP Bridge Status (col-6) -->
       <div class="card col-6">
-        <h3 style="font-size: 15px; font-weight: 700; margin-bottom: 8px;">🌐 Hỗ trợ Ứng dụng Chỉ Nhận HTTP Proxy</h3>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+          <h3 style="font-size: 15px; font-weight: 700; margin: 0;">🌐 HTTP Proxy Bridge</h3>
+          <span class="badge-status active">Port :8118</span>
+        </div>
         <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 10px;">
-          Nếu ứng dụng của bạn chỉ hỗ trợ HTTP/HTTPS proxy mà không hỗ trợ SOCKS5, bạn có thể kết hợp với <strong>Privoxy</strong> để chuyển đổi:
+          Tự động chuyển tiếp SOCKS5 sang HTTP Proxy, giúp <code>pip</code>, <code>apt-get</code>, <code>npm</code> chạy trơn tru 100% không gặp lỗi SOCKS support.
         </p>
-        <div class="code-snippet">
-          <code style="font-size: 11px;">forward-socks5 .github.com 127.0.0.1:40000 .</code>
-          <button onclick="copyToClipboard('forward-socks5 .github.com 127.0.0.1:40000 .\nforward-socks5 .gitlab.com 127.0.0.1:40000 .')" class="btn btn-secondary btn-sm">Copy</button>
+        <div style="font-size: 11px; color: var(--accent); font-family: 'JetBrains Mono';">
+          Endpoint: http://127.0.0.1:8118
         </div>
       </div>
     </div>
   </div>
 
-  <!-- TAB: DOCKER PROXY & BUILD CONSOLE -->
+  <!-- TAB 4: DOCKER & BUILD CONSOLE -->
   <div class="tab-pane" id="tab-docker">
     <div class="dashboard-grid">
 
-      <!-- Daemon Proxy Configuration Card (col-12) -->
+      <!-- Daemon Proxy Bar (col-12) -->
       <div class="card col-12">
-        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; flex-wrap: wrap; gap: 12px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
           <div>
-            <h3 style="font-size: 17px; font-weight: 700; margin: 0 0 6px 0;">🐳 Quản Lý Proxy Docker Daemon & Systemd Reload</h3>
-            <p style="font-size: 13px; color: var(--text-muted); margin: 0;">
-              Cấu hình dịch vụ Docker Daemon đi qua Cloudflare WARP SOCKS5 để kéo base images từ GitHub Packages, Quay.io, GCR, Docker Hub không bị timeout.
-            </p>
-          </div>
-          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-            <button onclick="fetchDockerStatus(true)" class="btn btn-secondary btn-sm" title="Làm mới trạng thái Docker">
-              🔄 Làm Mới
-            </button>
-            <button onclick="reloadDockerProxy(true)" class="btn btn-primary btn-sm" id="btnApplyDockerProxy">
-              ⚡ Áp Dụng & Reload Daemon
-            </button>
-            <button onclick="reloadDockerProxy(false)" class="btn btn-danger btn-sm" id="btnDisableDockerProxy">
-              🛑 Tắt Proxy Docker
-            </button>
-          </div>
-        </div>
-
-        <!-- Docker Daemon Status Indicators -->
-        <div class="stats-row" style="grid-template-columns: repeat(4, 1fr); margin-bottom: 18px;">
-          <div class="stat-box">
-            <div class="stat-label">Trạng thái Daemon</div>
-            <div id="dockerDaemonStatus" class="stat-value" style="color: var(--success); font-size: 14px;">Đang kiểm tra...</div>
-          </div>
-          <div class="stat-box">
-            <div class="stat-label">Phiên bản Docker</div>
-            <div id="dockerVersionValue" class="stat-value" style="font-size: 14px;">--</div>
-          </div>
-          <div class="stat-box">
-            <div class="stat-label">HTTP/HTTPS Proxy Daemon</div>
-            <div id="dockerProxyValue" class="stat-value" style="font-size: 12px; color: var(--accent);">--</div>
-          </div>
-          <div class="stat-box">
-            <div class="stat-label">File Cấu hình Systemd</div>
-            <div id="dockerConfStatus" class="stat-value" style="font-size: 12px;">--</div>
-          </div>
-        </div>
-
-        <!-- NO_PROXY Configuration & Presets -->
-        <div style="background: rgba(0, 0, 0, 0.25); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 12px; padding: 16px; margin-bottom: 16px;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 8px;">
-            <label style="font-size: 13px; font-weight: 600; color: var(--text);">
-              Danh sách NO_PROXY (Không định tuyến qua WARP):
-            </label>
-            <div class="quick-chips" style="margin-top: 0;">
-              <span style="font-size: 11px; color: var(--text-muted); align-self: center; margin-right: 4px;">Preset:</span>
-              <button type="button" class="chip-btn" onclick="setDockerNoProxyPreset('default')">Khuyên dùng (Docker Hub + Mạng nội bộ)</button>
-              <button type="button" class="chip-btn" onclick="setDockerNoProxyPreset('minimal')">Tất cả qua WARP</button>
-              <button type="button" class="chip-btn" onclick="setDockerNoProxyPreset('cluster')">Kubernetes / Mạng nội bộ</button>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <h3 style="font-size: 16px; font-weight: 700; margin: 0;">🐳 Proxy Docker Daemon</h3>
+              <span id="dockerDaemonStatus" class="badge-status active" style="font-size: 11px;">Đang kiểm tra...</span>
+            </div>
+            <div style="font-size: 12px; color: var(--text-muted); margin-top: 3px;">
+              Docker: <span id="dockerVersionValue" style="color: #fff; font-family: 'JetBrains Mono'; font-weight: 600;">--</span> |
+              Proxy: <span id="dockerProxyValue" style="color: var(--accent); font-family: 'JetBrains Mono'; font-weight: 600;">--</span>
             </div>
           </div>
-          <textarea id="dockerNoProxyInput" class="input-style" rows="2" style="font-family: 'JetBrains Mono', monospace; font-size: 12px; resize: vertical;" placeholder="localhost,127.0.0.1,docker.io,*.docker.io,*.docker.com,production.cloudflare.docker.com,103.186.100.0/23,192.168.200.0/24"></textarea>
-          <div style="font-size: 11px; color: var(--text-muted); margin-top: 6px;">
-            💡 <strong>Mẹo:</strong> Docker Hub tải trực tiếp tại máy chủ trong nước thường đạt tốc độ rất cao (~200 Mbps). Khuyến nghị giữ <code>docker.io,*.docker.io</code> trong NO_PROXY để kéo Docker Hub trực tiếp, các registry quốc tế khác tự động đi qua WARP.
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <button onclick="fetchDockerStatus(true)" class="btn btn-secondary btn-sm" title="Làm mới thông tin Docker">🔄</button>
+            <button onclick="reloadDockerProxy(true)" class="btn btn-primary btn-sm" id="btnApplyDockerProxy">⚡ Áp Dụng & Reload</button>
+            <button onclick="reloadDockerProxy(false)" class="btn btn-danger btn-sm" id="btnDisableDockerProxy">🛑 Tắt Proxy</button>
           </div>
         </div>
 
-        <!-- Raw Config preview -->
-        <div class="code-snippet" style="margin-top: 8px;">
-          <code id="dockerRawConfView" style="font-size: 11px;"># Chưa nạp thông tin cấu hình systemd</code>
-          <button onclick="copyToClipboard(document.getElementById('dockerRawConfView').innerText)" class="btn btn-secondary btn-sm">Copy Systemd Conf</button>
-        </div>
+        <!-- Hidden elements for JS compatibility -->
+        <span id="dockerConfStatus" style="display: none;"></span>
+
+        <!-- Collapsible NO_PROXY Settings -->
+        <details class="clean-accordion">
+          <summary>
+            <span>⚙️ Tùy Chỉnh Danh Sách NO_PROXY & File Cấu Hình Systemd</span>
+            <span style="font-size: 11px; color: var(--accent);">Mở rộng ▾</span>
+          </summary>
+          <div class="clean-accordion-body">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; flex-wrap: wrap; gap: 6px;">
+              <label style="font-size: 12px; color: var(--text-muted);">Quy tắc NO_PROXY:</label>
+              <div class="quick-chips" style="margin: 0;">
+                <button type="button" class="chip-btn" onclick="setDockerNoProxyPreset('default')">Khuyên dùng (Docker Hub trực tiếp)</button>
+                <button type="button" class="chip-btn" onclick="setDockerNoProxyPreset('minimal')">Tất cả qua WARP</button>
+                <button type="button" class="chip-btn" onclick="setDockerNoProxyPreset('cluster')">Kubernetes / LAN</button>
+              </div>
+            </div>
+            <textarea id="dockerNoProxyInput" class="input-style" rows="2" style="font-family: 'JetBrains Mono', monospace; font-size: 11px; resize: vertical;" placeholder="localhost,127.0.0.1,docker.io,*.docker.io,*.docker.com,production.cloudflare.docker.com"></textarea>
+            <div class="code-snippet" style="margin-top: 8px;">
+              <code id="dockerRawConfView" style="font-size: 11px;"># Chưa nạp thông tin cấu hình systemd</code>
+              <button onclick="copyToClipboard(document.getElementById('dockerRawConfView').innerText)" class="btn btn-secondary btn-sm">Copy Conf</button>
+            </div>
+          </div>
+        </details>
       </div>
 
       <!-- Docker Build Direct Execution Card (col-12) -->
       <div class="card col-12">
-        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; flex-wrap: wrap; gap: 12px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 10px;">
           <div>
-            <h3 style="font-size: 17px; font-weight: 700; margin: 0 0 6px 0;">🚀 Trình Thực Thi Lệnh Docker Build Trực Tiếp Trên Web UI</h3>
-            <p style="font-size: 13px; color: var(--text-muted); margin: 0;">
-              Thử nghiệm và thực thi lệnh <code>docker build</code> với tham số Proxy WARP (<code>--network host</code>, <code>--build-arg HTTP_PROXY=socks5://127.0.0.1:40000</code>) ngay trên giao diện web.
-            </p>
+            <h3 style="font-size: 16px; font-weight: 700; margin: 0 0 3px 0;">🚀 Quét Thư Mục & Thực Thi Docker Build Qua Proxy</h3>
+            <p style="font-size: 12px; color: var(--text-muted); margin: 0;">Chọn dự án có Dockerfile để build với proxy WARP/HTTP Bridge mà không cần gõ lệnh.</p>
           </div>
-          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-            <button onclick="runDockerBuild()" class="btn btn-primary" id="btnRunDockerBuild">
+          <div style="display: flex; gap: 8px;">
+            <button onclick="runDockerBuild()" class="btn btn-primary" id="btnRunDockerBuild" style="padding: 8px 20px;">
               <span id="buildSpinner" style="display: none;">⏳</span> <span>🚀 Bắt Đầu Build</span>
             </button>
-            <button onclick="cleanupDockerImage()" class="btn btn-danger btn-sm" id="btnCleanupDockerImage" title="Xóa image vừa build để giải phóng dung lượng đĩa">
+            <button onclick="cleanupDockerImage()" class="btn btn-danger btn-sm" id="btnCleanupDockerImage" title="Xóa image vừa build để giải phóng ổ đĩa">
               🗑️ Dọn Image
             </button>
-            <button onclick="clearDockerConsole()" class="btn btn-secondary btn-sm">
-              🧹 Xóa Console
+            <button onclick="clearDockerConsole()" class="btn btn-secondary btn-sm" title="Xóa màn hình console">
+              🧹 Xóa
             </button>
           </div>
         </div>
 
-        <!-- Directory / Project Dockerfile Discovery Section -->
-        <div style="background: rgba(0, 0, 0, 0.35); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 14px 16px; margin-bottom: 16px;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
-            <div style="display: flex; align-items: center; gap: 8px;">
-              <span style="font-size: 16px;">📂</span>
-              <strong style="font-size: 13px; color: #fff;">Quét & Chọn Thư Mục Dự Án Chứa Dockerfile</strong>
-              <span id="scanCountBadge" class="badge-status inactive" style="font-size: 11px;">Chưa quét</span>
+        <!-- Directory Scanner Section -->
+        <div style="background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 12px; padding: 12px 14px; margin-bottom: 14px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 6px;">
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <strong style="font-size: 12px; color: #fff;">📂 Quét Thư Mục Dự Án:</strong>
+              <span id="scanCountBadge" class="badge-status inactive" style="font-size: 10px;">Chưa quét</span>
             </div>
-            <div class="quick-chips" style="margin-top: 0;">
-              <span style="font-size: 11px; color: var(--text-muted); align-self: center;">Đường dẫn mẫu:</span>
-              <button type="button" class="chip-btn" onclick="setScanPath('/root')">📁 /root</button>
-              <button type="button" class="chip-btn" onclick="setScanPath('/home')">📁 /home</button>
-              <button type="button" class="chip-btn" onclick="setScanPath('/var/www')">📁 /var/www</button>
-              <button type="button" class="chip-btn" onclick="setScanPath('/root/linux-cloudflare-warp')">📁 Thư mục hiện tại</button>
+            <div class="quick-chips" style="margin: 0;">
+              <button type="button" class="chip-btn" onclick="setScanPath('/root')">/root</button>
+              <button type="button" class="chip-btn" onclick="setScanPath('/home')">/home</button>
+              <button type="button" class="chip-btn" onclick="setScanPath('/var/www')">/var/www</button>
+              <button type="button" class="chip-btn" onclick="setScanPath('/root/linux-cloudflare-warp')">Thư mục hiện tại</button>
             </div>
           </div>
 
-          <!-- Scan Path Input & Scan Button -->
-          <div style="display: grid; grid-template-columns: 1fr auto; gap: 10px; margin-bottom: 10px;">
-            <input type="text" id="dockerScanPath" class="input-style" value="/root" placeholder="Nhập đường dẫn thư mục cần quét trên server (VD: /root hoặc /home/user)" style="font-family: 'JetBrains Mono', monospace; font-size: 12px;" />
+          <div style="display: grid; grid-template-columns: 1fr auto; gap: 8px; margin-bottom: 10px;">
+            <input type="text" id="dockerScanPath" class="input-style" value="/root" placeholder="Nhập đường dẫn thư mục cần quét..." style="font-family: 'JetBrains Mono'; font-size: 12px;" />
             <button type="button" onclick="scanDockerDirectory()" class="btn btn-secondary btn-sm" id="btnScanDockerDir" style="white-space: nowrap; height: 38px;">
               <span id="scanSpinner" style="display: none;">⏳</span> <span>🔍 Quét Thư Mục</span>
             </button>
           </div>
 
-          <!-- Discovered Dockerfiles Dropdown & Action Buttons -->
-          <div style="display: grid; grid-template-columns: 1fr auto auto; gap: 10px; align-items: center;">
-            <select id="discoveredDockerfilesSelect" class="select-style" onchange="onDiscoveredDockerfileChange()" style="font-family: 'JetBrains Mono', monospace; font-size: 12px; height: 38px;">
-              <option value="">-- Danh sách Dockerfile tìm thấy trên server (Nhấn '🔍 Quét Thư Mục') --</option>
+          <div style="display: grid; grid-template-columns: 1fr auto auto; gap: 8px; align-items: center;">
+            <select id="discoveredDockerfilesSelect" class="select-style" onchange="onDiscoveredDockerfileChange()" style="font-family: 'JetBrains Mono'; font-size: 12px; height: 38px;">
+              <option value="">-- Chọn Dockerfile dự án tìm thấy (Nhấn '🔍 Quét Thư Mục') --</option>
             </select>
-            <button type="button" onclick="loadSelectedDiscoveredDockerfile()" class="btn btn-primary btn-sm" id="btnLoadSelectedDf" style="white-space: nowrap; height: 38px;" title="Tải nội dung Dockerfile vào trình soạn thảo và đặt thư mục làm Context">
-              📂 Nạp Vào Editor & Context
+            <button type="button" onclick="loadSelectedDiscoveredDockerfile()" class="btn btn-primary btn-sm" id="btnLoadSelectedDf" style="white-space: nowrap; height: 38px;" title="Tải vào editor và đặt làm Build Context">
+              📂 Nạp Vào Editor
             </button>
-            <button type="button" onclick="clearBuildContext()" class="btn btn-secondary btn-sm" style="white-space: nowrap; height: 38px;" title="Hủy chọn thư mục context, chuyển về chế độ build độc lập">
-              ✕ Bỏ Chọn Context
+            <button type="button" onclick="clearBuildContext()" class="btn btn-secondary btn-sm" style="white-space: nowrap; height: 38px;" title="Bỏ chọn context">
+              ✕ Bỏ Context
             </button>
           </div>
 
-          <!-- Active Build Context Banner -->
-          <div id="buildContextBanner" style="margin-top: 10px; padding: 10px 14px; background: rgba(0, 210, 255, 0.08); border: 1px solid rgba(0, 210, 255, 0.2); border-radius: 8px; font-size: 12px; display: none; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
-            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-              <span style="color: var(--accent); font-weight: 700;">🏗️ Thư mục Build Context:</span>
-              <code id="activeContextDirText" style="color: #fff; font-weight: 700; background: rgba(0,0,0,0.4); padding: 2px 8px; border-radius: 4px;">--</code>
-              <span id="activeDockerfileFileText" style="color: var(--text-muted); font-size: 11px;">(File: --)</span>
+          <!-- Active Context Banner -->
+          <div id="buildContextBanner" style="margin-top: 10px; padding: 8px 12px; background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.2); border-radius: 8px; font-size: 12px; display: none; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px;">
+            <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+              <span style="color: var(--accent); font-weight: 700;">🏗️ Build Context:</span>
+              <code id="activeContextDirText" style="color: #fff; font-weight: 700; background: rgba(0,0,0,0.4); padding: 1px 6px; border-radius: 4px;">--</code>
+              <span id="activeDockerfileFileText" style="color: var(--text-muted); font-size: 11px;">(--)</span>
             </div>
-            <span style="font-size: 11px; color: #6ee7b7; background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.25); padding: 3px 10px; border-radius: 6px; font-weight: 600;">
-              ✓ Các lệnh COPY / ADD cục bộ sẽ lấy từ thư mục này
-            </span>
+            <span style="font-size: 11px; color: #6ee7b7; font-weight: 600;">✓ Lệnh COPY/ADD lấy từ thư mục này</span>
           </div>
         </div>
 
-        <!-- Presets and Build Config Row -->
-        <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 14px; margin-bottom: 14px;">
-          <div>
-            <label style="font-size: 12px; font-weight: 600; color: var(--text-muted); display: block; margin-bottom: 6px;">
-              Mẫu Dockerfile có sẵn (Nhấp để chọn mẫu thử nghiệm nhanh):
-            </label>
-            <div class="quick-chips" style="margin-top: 0;">
-              <button type="button" class="chip-btn" onclick="loadDockerfileTemplate('alpine')">🏔️ Alpine + cURL</button>
-              <button type="button" class="chip-btn" onclick="loadDockerfileTemplate('python')">🐍 Python + Pip Packages</button>
-              <button type="button" class="chip-btn" onclick="loadDockerfileTemplate('node')">🟩 Node.js + NPM Express</button>
-              <button type="button" class="chip-btn" onclick="loadDockerfileTemplate('git')">🐙 Git Clone Repo Test</button>
-              <button type="button" class="chip-btn" onclick="loadDockerfileTemplate('custom')">✏️ Tùy chỉnh trống</button>
-            </div>
-          </div>
-          <div>
-            <label style="font-size: 12px; font-weight: 600; color: var(--text-muted); display: block; margin-bottom: 6px;">
-              Tag Name Image:
-            </label>
-            <input type="text" id="dockerBuildTag" class="input-style" value="warp-build-test:latest" style="font-family: 'JetBrains Mono', monospace; font-size: 12px;" />
-          </div>
-        </div>
-
-        <!-- Build Options Checkboxes -->
-        <div style="display: flex; gap: 14px; flex-wrap: wrap; align-items: center; margin-bottom: 14px; background: rgba(255, 255, 255, 0.02); padding: 10px 14px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.05);">
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <label style="font-size: 12px; font-weight: 600; color: var(--text);">Nguồn Proxy:</label>
+        <!-- Build Options Toolbar -->
+        <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; background: rgba(255, 255, 255, 0.02); padding: 8px 12px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.05);">
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <label style="font-size: 12px; font-weight: 600; color: var(--text);">Proxy:</label>
             <select id="dockerBuildProxySource" class="select-style" style="width: auto; padding: 4px 8px; font-size: 12px;">
               <option value="warp">⚡ Cloudflare WARP (HTTP Bridge :8118 / SOCKS5 :40000)</option>
               <option value="residential">🏡 Proxy Dân Cư (Residential)</option>
               <option value="none">🟢 Đi trực tiếp (Không qua Proxy)</option>
             </select>
-            <span id="privoxyBadge" style="font-size: 11px; padding: 2px 8px; border-radius: 6px; background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3);">🟢 HTTP Bridge :8118 (pip/apt OK)</span>
+            <span id="privoxyBadge" style="font-size: 11px; padding: 2px 7px; border-radius: 6px; background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3);">🟢 HTTP Bridge :8118</span>
           </div>
-          <label style="font-size: 12px; display: flex; align-items: center; gap: 6px; cursor: pointer;">
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <label style="font-size: 12px; font-weight: 600; color: var(--text);">Tag:</label>
+            <input type="text" id="dockerBuildTag" class="input-style" value="warp-build-test:latest" style="width: 160px; font-family: 'JetBrains Mono'; font-size: 11px; padding: 4px 8px;" />
+          </div>
+          <label style="font-size: 11px; display: flex; align-items: center; gap: 4px; cursor: pointer;">
             <input type="checkbox" id="chkInjectProxy" checked>
-            <span>Inject build-arg Proxy</span>
+            <span>Inject build-arg</span>
           </label>
-          <label style="font-size: 12px; display: flex; align-items: center; gap: 6px; cursor: pointer;">
+          <label style="font-size: 11px; display: flex; align-items: center; gap: 4px; cursor: pointer;">
             <input type="checkbox" id="chkNetworkHost" checked>
-            <span>Sử dụng <code>--network host</code></span>
+            <span>--network host</span>
           </label>
-          <label style="font-size: 12px; display: flex; align-items: center; gap: 6px; cursor: pointer;">
+          <label style="font-size: 11px; display: flex; align-items: center; gap: 4px; cursor: pointer;">
             <input type="checkbox" id="chkNoCache" checked>
-            <span>Sử dụng <code>--no-cache</code></span>
+            <span>--no-cache</span>
           </label>
-          <label style="font-size: 12px; display: flex; align-items: center; gap: 6px; cursor: pointer;">
+          <label style="font-size: 11px; display: flex; align-items: center; gap: 4px; cursor: pointer;">
             <input type="checkbox" id="chkAutoCleanup">
-            <span>Tự động dọn dẹp image</span>
+            <span>Dọn sau build</span>
           </label>
         </div>
 
-        <!-- Dockerfile Editor Area -->
-        <div style="margin-bottom: 14px;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-            <label style="font-size: 12px; font-weight: 600; color: var(--text-muted);">
-              Nội dung Dockerfile:
-            </label>
-            <span style="font-size: 11px; color: var(--text-muted);">Hỗ trợ đầy đủ lệnh BuildKit</span>
+        <!-- Dockerfile Editor (Collapsible) -->
+        <details class="clean-accordion" open style="margin-bottom: 12px;">
+          <summary>
+            <span>✏️ Trình Soạn Thảo Dockerfile (Nhấn để ẩn/hiện)</span>
+            <div class="quick-chips" style="margin: 0;" onclick="event.stopPropagation()">
+              <button type="button" class="chip-btn" onclick="loadDockerfileTemplate('alpine')">🏔️ Alpine</button>
+              <button type="button" class="chip-btn" onclick="loadDockerfileTemplate('python')">🐍 Python</button>
+              <button type="button" class="chip-btn" onclick="loadDockerfileTemplate('node')">🟩 Node.js</button>
+              <button type="button" class="chip-btn" onclick="loadDockerfileTemplate('custom')">Tùy chỉnh</button>
+            </div>
+          </summary>
+          <div class="clean-accordion-body">
+            <textarea id="dockerfileEditor" class="input-style" rows="6" style="font-family: 'JetBrains Mono', monospace; font-size: 12px; line-height: 1.5; resize: vertical;" spellcheck="false"></textarea>
           </div>
-          <textarea id="dockerfileEditor" class="input-style" rows="7" style="font-family: 'JetBrains Mono', monospace; font-size: 12px; line-height: 1.5; tab-size: 2; resize: vertical;" spellcheck="false"></textarea>
-        </div>
+        </details>
 
-        <!-- Live Terminal Console Log -->
+        <!-- Live Terminal Console -->
         <div>
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-            <div style="font-size: 12px; font-weight: 600; color: var(--text-muted); display: flex; align-items: center; gap: 8px;">
-              <span>📺 Live Terminal Console Output:</span>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+            <div style="font-size: 12px; font-weight: 600; color: var(--text-muted); display: flex; align-items: center; gap: 6px;">
+              <span>📺 Terminal Console:</span>
               <span id="buildStatusBadge" class="badge-status inactive">○ Chờ lệnh build</span>
             </div>
-            <div id="buildMetrics" style="font-size: 11px; color: var(--text-muted); font-family: 'JetBrains Mono', monospace;">
-              --
-            </div>
+            <div id="buildMetrics" style="font-size: 11px; color: var(--text-muted); font-family: 'JetBrains Mono';">--</div>
           </div>
-          <div id="dockerBuildConsole" class="terminal-box" style="min-height: 220px; max-height: 380px;">
-[Sẵn sàng] Hãy chọn một mẫu Dockerfile hoặc soạn thảo nội dung của bạn ở trên, sau đó nhấn "🚀 Bắt Đầu Build".
+          <div id="dockerBuildConsole" class="terminal-box" style="min-height: 200px; max-height: 380px;">
+[Sẵn sàng] Chọn một Dockerfile dự án ở trên hoặc soạn thảo nội dung, sau đó nhấn "🚀 Bắt Đầu Build".
           </div>
         </div>
-
       </div>
-
     </div>
   </div>
 
-  <!-- TAB: PROXY DÂN CƯ (RESIDENTIAL PROXY) -->
+  <!-- TAB 5: PROXY DÂN CƯ -->
   <div class="tab-pane" id="tab-residential">
     <div class="dashboard-grid">
-
-      <!-- Active Egress Control Card (col-12) -->
+      <!-- Active Egress Status Card (col-12) -->
       <div class="card col-12">
-        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
           <div>
-            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 6px;">
-              <h3 style="font-size: 18px; font-weight: 700; margin: 0;">🏡 Quản Lý Kết Nối Proxy Dân Cư (Residential / Clean ISP IP)</h3>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <h3 style="font-size: 17px; font-weight: 700; margin: 0;">🏡 Quản Lý Proxy Dân Cư (Residential IP)</h3>
               <span id="resActiveBadge" class="badge-status active">● Đang dùng WARP</span>
             </div>
-            <p style="font-size: 13px; color: var(--text-muted); margin: 0;">
-              Kết nối đến máy chủ Proxy Dân Cư (IP sạch, băng thông cao, không bị chặn CAPTCHA) để tăng tốc tải mã nguồn, build container hoặc crawl dữ liệu.
+            <p style="font-size: 12px; color: var(--text-muted); margin-top: 3px;">
+              Định tuyến lưu lượng qua proxy dân cư IP sạch, chống chặn và tải mã nguồn tốc độ cao.
             </p>
           </div>
-          <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-            <button onclick="applyResidentialProxy('all')" class="btn btn-primary btn-sm" id="btnActivateResidential" title="Chuyển toàn bộ Docker và Git sang dùng Proxy Dân Cư">
+          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <button onclick="applyResidentialProxy('all')" class="btn btn-primary btn-sm" id="btnActivateResidential">
               ⚡ Kích Hoạt Proxy Dân Cư (Docker + Git)
             </button>
-            <button onclick="switchBackToWarp()" class="btn btn-secondary btn-sm" id="btnSwitchToWarp" title="Khôi phục lại Cloudflare WARP Anycast">
-              🛡️ Khôi Phục Về Cloudflare WARP
+            <button onclick="switchBackToWarp()" class="btn btn-secondary btn-sm" id="btnSwitchToWarp">
+              🛡️ Khôi Phục WARP
             </button>
           </div>
         </div>
 
-        <!-- Quick Summary Row -->
-        <div class="stats-row" style="grid-template-columns: repeat(4, 1fr); margin-top: 18px;">
-          <div class="stat-box">
-            <div class="stat-label">Nguồn Egress Hoạt Động</div>
-            <div id="resCurrentEgress" class="stat-value" style="color: var(--accent); font-size: 13px;">Cloudflare WARP Anycast</div>
+        <div class="metric-grid-4">
+          <div class="metric-pill">
+            <div class="lbl">Nguồn Egress Hiện Tại</div>
+            <div id="resCurrentEgress" class="val" style="color: var(--accent); font-size: 13px;">WARP Anycast</div>
           </div>
-          <div class="stat-box">
-            <div class="stat-label">Địa Chỉ Proxy Dân Cư</div>
-            <div id="resMaskedUrl" class="stat-value" style="font-size: 13px;">Chưa cấu hình</div>
+          <div class="metric-pill">
+            <div class="lbl">Địa Chỉ Proxy</div>
+            <div id="resMaskedUrl" class="val" style="font-size: 13px;">Chưa cấu hình</div>
           </div>
-          <div class="stat-box">
-            <div class="stat-label">Nhà Mạng / ISP Egress</div>
-            <div id="resIspValue" class="stat-value" style="font-size: 13px;">--</div>
+          <div class="metric-pill">
+            <div class="lbl">Nhà Mạng / ISP</div>
+            <div id="resIspValue" class="val" style="font-size: 13px;">--</div>
           </div>
-          <div class="stat-box">
-            <div class="stat-label">Tốc Độ Đo Gần Nhất</div>
-            <div id="resSpeedValue" class="stat-value" style="font-size: 13px; color: var(--success);">--</div>
+          <div class="metric-pill">
+            <div class="lbl">Tốc Độ Đo Được</div>
+            <div id="resSpeedValue" class="val" style="font-size: 13px; color: var(--success);">--</div>
           </div>
         </div>
       </div>
 
-      <!-- Config Form Card (col-7) -->
+      <!-- Quick Smart-Paste Card (col-7) -->
       <div class="card col-7">
-        <h4 style="font-size: 15px; font-weight: 700; margin-bottom: 6px;">⚙️ Thông Tin Kết Nối Proxy Dân Cư</h4>
-        <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 14px;">
-          Hỗ trợ nhập trực tiếp hoặc dán chuỗi proxy từ các nhà cung cấp (BrightData, Oxylabs, Smartproxy, Webshare, IPRoyal, Proxy-Seller,...).
+        <h4 style="font-size: 14px; font-weight: 700; margin-bottom: 4px;">⚡ Nhập Nhanh Chuỗi Proxy</h4>
+        <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">
+          Tự động phân tích định dạng: <code>IP:PORT:USER:PASS</code> hoặc <code>socks5://...</code>
         </p>
 
-        <!-- Quick Auto-Parse Box -->
-        <div style="background: rgba(0, 0, 0, 0.3); border: 1px dashed rgba(255, 255, 255, 0.15); border-radius: 10px; padding: 12px; margin-bottom: 16px;">
-          <label style="font-size: 12px; font-weight: 600; color: var(--accent); display: block; margin-bottom: 6px;">
-            📋 Nhập nhanh chuỗi Proxy (Tự động bóc tách):
-          </label>
-          <div style="display: flex; gap: 8px;">
-            <input type="text" id="resQuickInput" class="input-style" placeholder="VD: 103.186.x.x:8080:username:password hoặc user:pass@host:port" style="font-family: 'JetBrains Mono', monospace; font-size: 12px;" />
-            <button type="button" onclick="autoParseProxyInput()" class="btn btn-primary btn-sm" style="white-space: nowrap;">
-              ⚡ Phân Tích
-            </button>
-          </div>
-          <div style="font-size: 11px; color: var(--text-muted); margin-top: 5px;">
-            Hỗ trợ định dạng: <code>IP:PORT:USER:PASS</code>, <code>USER:PASS@HOST:PORT</code>, hoặc URL <code>socks5://...</code>
-          </div>
+        <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+          <input type="text" id="resQuickInput" class="input-style" placeholder="VD: 103.186.x.x:8080:username:password" style="font-family: 'JetBrains Mono'; font-size: 12px;" />
+          <button type="button" onclick="autoParseProxyInput()" class="btn btn-primary btn-sm" style="white-space: nowrap;">
+            ⚡ Phân Tích
+          </button>
         </div>
 
-        <!-- Detail Form -->
-        <div style="display: grid; grid-template-columns: 1fr 2fr 1fr; gap: 10px; margin-bottom: 12px;">
-          <div>
-            <label style="font-size: 12px; color: var(--text-muted); display: block; margin-bottom: 4px;">Giao thức</label>
-            <select id="resProto" class="select-style">
-              <option value="socks5">SOCKS5 (Khuyên dùng)</option>
-              <option value="http">HTTP</option>
-              <option value="https">HTTPS</option>
-            </select>
-          </div>
-          <div>
-            <label style="font-size: 12px; color: var(--text-muted); display: block; margin-bottom: 4px;">Host / IP Máy Chủ Proxy</label>
-            <input type="text" id="resHost" class="input-style" placeholder="VD: res.proxyprovider.com hoặc 103.x.x.x" style="font-family: 'JetBrains Mono';" />
-          </div>
-          <div>
-            <label style="font-size: 12px; color: var(--text-muted); display: block; margin-bottom: 4px;">Port</label>
-            <input type="number" id="resPort" class="input-style" placeholder="1080" value="1080" style="font-family: 'JetBrains Mono';" />
-          </div>
-        </div>
+        <!-- Detailed Form in Collapsible Accordion -->
+        <details class="clean-accordion">
+          <summary>
+            <span>⚙️ Chỉnh Sửa Chi Tiết (Host, Port, Tài khoản, NO_PROXY)</span>
+            <span style="font-size: 11px; color: var(--accent);">Chi tiết ▾</span>
+          </summary>
+          <div class="clean-accordion-body">
+            <div style="display: grid; grid-template-columns: 1fr 2fr 1fr; gap: 8px; margin-bottom: 10px;">
+              <div>
+                <label style="font-size: 11px; color: var(--text-muted); display: block; margin-bottom: 2px;">Giao thức</label>
+                <select id="resProto" class="select-style">
+                  <option value="socks5">SOCKS5</option>
+                  <option value="http">HTTP</option>
+                  <option value="https">HTTPS</option>
+                </select>
+              </div>
+              <div>
+                <label style="font-size: 11px; color: var(--text-muted); display: block; margin-bottom: 2px;">Host / IP</label>
+                <input type="text" id="resHost" class="input-style" placeholder="proxy.example.com" style="font-family: 'JetBrains Mono'; font-size: 12px;" />
+              </div>
+              <div>
+                <label style="font-size: 11px; color: var(--text-muted); display: block; margin-bottom: 2px;">Port</label>
+                <input type="number" id="resPort" class="input-style" placeholder="1080" value="1080" style="font-family: 'JetBrains Mono'; font-size: 12px;" />
+              </div>
+            </div>
 
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px;">
-          <div>
-            <label style="font-size: 12px; color: var(--text-muted); display: block; margin-bottom: 4px;">Tài khoản (Username - Tùy chọn)</label>
-            <input type="text" id="resUser" class="input-style" placeholder="Để trống nếu IP Whitelist" />
-          </div>
-          <div>
-            <label style="font-size: 12px; color: var(--text-muted); display: block; margin-bottom: 4px;">Mật khẩu (Password - Tùy chọn)</label>
-            <input type="password" id="resPass" class="input-style" placeholder="Nhập mật khẩu proxy" />
-          </div>
-        </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px;">
+              <div>
+                <label style="font-size: 11px; color: var(--text-muted); display: block; margin-bottom: 2px;">Tài khoản</label>
+                <input type="text" id="resUser" class="input-style" placeholder="Tùy chọn" style="font-size: 12px;" />
+              </div>
+              <div>
+                <label style="font-size: 11px; color: var(--text-muted); display: block; margin-bottom: 2px;">Mật khẩu</label>
+                <input type="password" id="resPass" class="input-style" placeholder="Tùy chọn" style="font-size: 12px;" />
+              </div>
+            </div>
 
-        <!-- NO_PROXY Input -->
-        <div style="margin-bottom: 16px;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-            <label style="font-size: 12px; color: var(--text-muted);">Danh sách NO_PROXY (Không qua proxy dân cư):</label>
-            <div class="quick-chips" style="margin-top:0;">
-              <button type="button" class="chip-btn" onclick="document.getElementById('resNoProxy').value='localhost,127.0.0.1,docker.io,*.docker.io,*.docker.com,production.cloudflare.docker.com,103.186.100.0/23,192.168.200.0/24';">Khuyên dùng</button>
-              <button type="button" class="chip-btn" onclick="document.getElementById('resNoProxy').value='localhost,127.0.0.1';">Tối thiểu</button>
+            <div style="margin-bottom: 12px;">
+              <label style="font-size: 11px; color: var(--text-muted); display: block; margin-bottom: 2px;">NO_PROXY:</label>
+              <input type="text" id="resNoProxy" class="input-style" value="localhost,127.0.0.1,docker.io,*.docker.io,*.docker.com" style="font-family: 'JetBrains Mono'; font-size: 11px;" />
             </div>
           </div>
-          <input type="text" id="resNoProxy" class="input-style" value="localhost,127.0.0.1,docker.io,*.docker.io,*.docker.com,production.cloudflare.docker.com,103.186.100.0/23,192.168.200.0/24" style="font-family: 'JetBrains Mono'; font-size: 11px;" />
-        </div>
+        </details>
 
-        <!-- Form Buttons -->
-        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+        <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px;">
           <button onclick="saveResidentialProxy()" class="btn btn-primary btn-sm" id="btnSaveResProxy">
             💾 Lưu Cấu Hình
           </button>
           <button onclick="testResidentialProxy()" class="btn btn-secondary btn-sm" id="btnTestResProxy">
-            <span id="resTestSpinner" style="display: none;">⏳</span> <span>🔍 Kiểm Tra Kết Nối & Đo Tốc Độ</span>
+            <span id="resTestSpinner" style="display: none;">⏳</span> <span>🔍 Đo Tốc Độ Proxy</span>
           </button>
-          <button onclick="applyResidentialProxy('docker')" class="btn btn-secondary btn-sm" title="Chỉ áp dụng riêng cho Docker Daemon">
+          <button onclick="applyResidentialProxy('docker')" class="btn btn-secondary btn-sm">
             🐳 Áp Dụng Docker
           </button>
-          <button onclick="applyResidentialProxy('git')" class="btn btn-secondary btn-sm" title="Chỉ áp dụng riêng cho GitHub/GitLab">
+          <button onclick="applyResidentialProxy('git')" class="btn btn-secondary btn-sm">
             🐙 Áp Dụng Git
           </button>
         </div>
       </div>
 
-      <!-- Test Result & Diagnostics Card (col-5) -->
+      <!-- Test Result Card (col-5) -->
       <div class="card col-5">
-        <h4 style="font-size: 15px; font-weight: 700; margin-bottom: 6px;">📊 Kết Quả Kiểm Tra Proxy</h4>
-        <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 14px;">
-          Thông tin Egress IP thực tế, nhà mạng ISP, độ trễ và băng thông tải xuống khi qua proxy dân cư.
-        </p>
+        <h4 style="font-size: 14px; font-weight: 700; margin-bottom: 4px;">📊 Kết Quả Kiểm Tra Proxy</h4>
+        <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">Thông số Egress IP, độ trễ và băng thông thực tế:</p>
 
-        <div id="resTestResultBox" style="background: rgba(0, 0, 0, 0.35); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 16px; min-height: 220px; display: flex; flex-direction: column; justify-content: center;">
-          <div id="resTestWaiting" style="text-align: center; color: var(--text-muted); font-size: 13px;">
-            <div style="font-size: 32px; margin-bottom: 8px;">🏡</div>
-            Nhấn <strong>"🔍 Kiểm Tra Kết Nối & Đo Tốc Độ"</strong> để đo kiểm thông số thực tế của Proxy Dân Cư.
+        <div id="resTestResultBox" style="background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 12px; padding: 14px; min-height: 180px; display: flex; flex-direction: column; justify-content: center;">
+          <div id="resTestWaiting" style="text-align: center; color: var(--text-muted); font-size: 12px;">
+            <div style="font-size: 28px; margin-bottom: 6px;">🏡</div>
+            Nhấn <strong>"🔍 Đo Tốc Độ Proxy"</strong> để kiểm tra kết nối.
           </div>
 
           <div id="resTestDetails" style="display: none;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 8px;">
-              <span style="font-size: 12px; color: var(--text-muted);">Trạng thái kết nối:</span>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 6px;">
+              <span style="font-size: 11px; color: var(--text-muted);">Trạng thái:</span>
               <span id="resDiagBadge" class="badge-status active">✓ Kết nối thành công</span>
             </div>
-            <div style="display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 12px;">
-              <span style="color: var(--text-muted);">Egress IP Public:</span>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 12px;">
+              <span style="color: var(--text-muted);">Egress IP:</span>
               <strong id="resDiagIp" style="font-family: 'JetBrains Mono'; color: var(--accent);">--</strong>
             </div>
-            <div style="display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 12px;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 12px;">
               <span style="color: var(--text-muted);">Nhà mạng (ISP):</span>
               <strong id="resDiagIsp">--</strong>
             </div>
-            <div style="display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 12px;">
-              <span style="color: var(--text-muted);">Vị trí / Quốc gia:</span>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 12px;">
+              <span style="color: var(--text-muted);">Quốc gia:</span>
               <strong id="resDiagLocation">--</strong>
             </div>
-            <div style="display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 12px;">
-              <span style="color: var(--text-muted);">Độ trễ TTFB (Ping):</span>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 12px;">
+              <span style="color: var(--text-muted);">Độ trễ TTFB:</span>
               <strong id="resDiagLatency" style="font-family: 'JetBrains Mono'; color: #6ee7b7;">-- ms</strong>
             </div>
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.2); padding: 8px 12px; border-radius: 8px;">
-              <span style="font-size: 12px; color: #6ee7b7; font-weight: 600;">Tốc độ tải đo được:</span>
-              <span id="resDiagSpeed" style="font-family: 'JetBrains Mono'; font-size: 16px; font-weight: 800; color: #6ee7b7;">-- MB/s</span>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.2); padding: 6px 10px; border-radius: 6px;">
+              <span style="font-size: 11px; color: #6ee7b7; font-weight: 600;">Tốc độ tải:</span>
+              <span id="resDiagSpeed" style="font-family: 'JetBrains Mono'; font-size: 15px; font-weight: 800; color: #6ee7b7;">-- MB/s</span>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- Quick Commands CheatSheet (col-12) -->
-      <div class="card col-12">
-        <h4 style="font-size: 15px; font-weight: 700; margin-bottom: 10px;">📌 Lệnh Dòng Lệnh Nhanh Cho Proxy Dân Cư</h4>
-        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px;">
-          <div>
-            <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 6px;">Lệnh cURL kiểm tra Egress IP qua Proxy Dân Cư:</div>
-            <div class="code-snippet">
-              <code id="resCurlSnippet">curl -x "socks5://user:pass@host:port" https://cloudflare.com/cdn-cgi/trace</code>
-              <button onclick="copyToClipboard(document.getElementById('resCurlSnippet').innerText)" class="btn btn-secondary btn-sm">Copy</button>
+      <!-- Collapsible CLI Cheatsheet for Residential Proxy -->
+      <div class="col-12" style="margin-top: -6px;">
+        <details class="clean-accordion">
+          <summary>
+            <span>💡 Xem lệnh Terminal (cURL & Export cho Proxy Dân Cư)</span>
+            <span style="font-size: 11px; color: var(--accent);">Mở rộng ▾</span>
+          </summary>
+          <div class="clean-accordion-body">
+            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;">
+              <div>
+                <span style="font-size: 11px; color: var(--text-muted);">Kiểm tra qua cURL:</span>
+                <div class="code-snippet">
+                  <code id="resCurlSnippet">curl -x "socks5://user:pass@host:port" https://cloudflare.com/cdn-cgi/trace</code>
+                  <button onclick="copyToClipboard(document.getElementById('resCurlSnippet').innerText)" class="btn btn-secondary btn-sm">Copy</button>
+                </div>
+              </div>
+              <div>
+                <span style="font-size: 11px; color: var(--text-muted);">Biến môi trường Terminal:</span>
+                <div class="code-snippet">
+                  <code id="resExportSnippet">export all_proxy="socks5://user:pass@host:port"</code>
+                  <button onclick="copyToClipboard(document.getElementById('resExportSnippet').innerText)" class="btn btn-secondary btn-sm">Copy</button>
+                </div>
+              </div>
             </div>
           </div>
-          <div>
-            <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 6px;">Biến môi trường Terminal / CI-CD Pipeline:</div>
-            <div class="code-snippet">
-              <code id="resExportSnippet">export all_proxy="socks5://user:pass@host:port"</code>
-              <button onclick="copyToClipboard(document.getElementById('resExportSnippet').innerText)" class="btn btn-secondary btn-sm">Copy</button>
-            </div>
-          </div>
-        </div>
+        </details>
       </div>
 
     </div>
   </div>
 
-  <!-- TAB 4: GITLAB CI/CD -->
+  <!-- TAB 6: GITLAB CI/CD -->
   <div class="tab-pane" id="tab-gitlab">
     <div class="dashboard-grid">
       <div class="card col-12">
-        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px; flex-wrap: wrap; gap: 10px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 8px;">
           <div>
-            <h3 style="font-size: 17px; font-weight: 700; margin: 0 0 6px 0;">🦊 Tăng Tốc GitLab CI/CD Pipeline & GitLab Runner</h3>
-            <p style="font-size: 13px; color: var(--text-muted); margin: 0;">
-              Khắc phục triệt để tình trạng kéo code từ gitlab.com bị treo, kéo container images hoặc tải dependencies (NPM, PyPI, Go) trong pipeline bị chậm.
-            </p>
+            <h3 style="font-size: 17px; font-weight: 700; margin: 0 0 3px 0;">🦊 Tăng Tốc GitLab CI/CD Pipeline & Runner</h3>
+            <p style="font-size: 12px; color: var(--text-muted); margin: 0;">Khắc phục lỗi kéo code từ gitlab.com và tải dependencies (NPM, PyPI) trong pipeline.</p>
           </div>
-          <span style="font-size: 12px; color: var(--accent); font-weight: 600; background: rgba(249, 115, 22, 0.1); padding: 6px 12px; border-radius: 8px; border: 1px solid rgba(249, 115, 22, 0.2);">
-            Proxy Endpoint: 127.0.0.1:40000
-          </span>
+          <span class="badge-status active">Endpoint: 127.0.0.1:40000</span>
         </div>
 
-        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; margin-top: 16px;">
-          <div style="background: rgba(0, 0, 0, 0.25); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 14px; padding: 18px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-              <h4 style="font-size: 14px; font-weight: 700; color: #fff; margin: 0;">1. Cấu hình cho .gitlab-ci.yml</h4>
+        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px;">
+          <div style="background: rgba(0, 0, 0, 0.25); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 12px; padding: 14px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+              <h4 style="font-size: 13px; font-weight: 700; color: #fff; margin: 0;">1. Cấu hình .gitlab-ci.yml</h4>
               <button onclick="copyToClipboard('variables:\n  ALL_PROXY: \x22socks5://127.0.0.1:40000\x22\n  NO_PROXY: \x22localhost,127.0.0.1,docker.io,*.docker.com\x22')" class="btn btn-secondary btn-sm">Copy YAML</button>
             </div>
-            <p style="font-size: 12px; color: var(--text-muted); margin: 0 0 10px 0;">Thêm khối variables vào đầu file để áp dụng cho mọi stage/job:</p>
-            <div class="code-snippet" style="flex-direction: column; align-items: stretch; gap: 8px; margin: 0;">
-              <code style="white-space: pre; font-size: 12px; line-height: 1.6;">variables:
+            <div class="code-snippet" style="flex-direction: column; align-items: stretch; gap: 6px;">
+              <code style="white-space: pre; font-size: 11px; line-height: 1.5;">variables:
   ALL_PROXY: "socks5://127.0.0.1:40000"
   HTTP_PROXY: "socks5://127.0.0.1:40000"
   HTTPS_PROXY: "socks5://127.0.0.1:40000"
@@ -2011,54 +2143,47 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
             </div>
           </div>
 
-          <div style="background: rgba(0, 0, 0, 0.25); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 14px; padding: 18px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-              <h4 style="font-size: 14px; font-weight: 700; color: #fff; margin: 0;">2. Cấu hình cho config.toml của Runner</h4>
+          <div style="background: rgba(0, 0, 0, 0.25); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 12px; padding: 14px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+              <h4 style="font-size: 13px; font-weight: 700; color: #fff; margin: 0;">2. Runner config.toml</h4>
               <button onclick="copyToClipboard('[runners.docker]\n  network_mode = \x22host\x22\nenvironment = [\n  \x22ALL_PROXY=socks5://127.0.0.1:40000\x22\n]')" class="btn btn-secondary btn-sm">Copy TOML</button>
             </div>
-            <p style="font-size: 12px; color: var(--text-muted); margin: 0 0 10px 0;">Trong <code>/etc/gitlab-runner/config.toml</code> (Bắt buộc dùng network_mode = "host"):</p>
-            <div class="code-snippet" style="flex-direction: column; align-items: stretch; gap: 8px; margin: 0;">
-              <code style="white-space: pre; font-size: 12px; line-height: 1.6;">[[runners]]
+            <div class="code-snippet" style="flex-direction: column; align-items: stretch; gap: 6px;">
+              <code style="white-space: pre; font-size: 11px; line-height: 1.5;">[[runners]]
   environment = ["ALL_PROXY=socks5://127.0.0.1:40000"]
   [runners.docker]
     network_mode = "host"</code>
             </div>
           </div>
         </div>
-
-        <div style="background: rgba(249, 115, 22, 0.06); border: 1px solid rgba(249, 115, 22, 0.2); border-radius: 12px; padding: 14px 18px; margin-top: 18px;">
-          <div style="font-size: 13px; font-weight: 600; color: #fdba74; margin-bottom: 4px;">💡 File Mẫu Đầy Đủ Có Sẵn Trong Thư Mục Cài Đặt:</div>
-          <div style="font-size: 12px; color: var(--text-muted);">
-            Bạn có thể tham khảo trực tiếp 2 file mẫu: <strong><code>gitlab-ci.example.yml</code></strong> (tích hợp sẵn cache, Node, Python, Docker) và <strong><code>gitlab-runner.example.toml</code></strong>.
-          </div>
-        </div>
       </div>
     </div>
   </div>
 
-  <!-- TAB 5: NHẬT KÝ & CHẨN ĐOÁN -->
+  <!-- TAB 7: LOGS -->
   <div class="tab-pane" id="tab-logs">
     <div class="dashboard-grid">
       <div class="card col-12">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 10px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
           <div>
-            <h3 style="font-size: 17px; font-weight: 700; margin: 0 0 4px 0;">📋 Nhật Ký Dịch Vụ Hệ Thống (warp-svc)</h3>
-            <p style="font-size: 13px; color: var(--text-muted); margin: 0;">Xem nhật ký hoạt động thời gian thực của daemon Cloudflare WARP trên máy chủ.</p>
+            <h3 style="font-size: 16px; font-weight: 700; margin: 0 0 2px 0;">📋 Nhật Ký Dịch Vụ Hệ Thống (warp-svc)</h3>
+            <p style="font-size: 12px; color: var(--text-muted); margin: 0;">Nhật ký hoạt động thời gian thực của daemon Cloudflare WARP.</p>
           </div>
-          <div style="display: flex; gap: 10px; align-items: center;">
+          <div style="display: flex; gap: 8px; align-items: center;">
             <label style="font-size: 12px; color: var(--text-muted); display: flex; align-items: center; gap: 6px; cursor: pointer;">
               <input type="checkbox" id="autoLogsCheck" onchange="toggleAutoLogs()"> Tự động làm mới (5s)
             </label>
-            <button onclick="loadLogs()" class="btn btn-secondary btn-sm">🔄 Làm mới ngay</button>
+            <button onclick="loadLogs()" class="btn btn-secondary btn-sm">🔄 Làm mới</button>
           </div>
         </div>
-        <div id="logsBox" class="terminal-box" style="max-height: 420px; font-size: 12px; line-height: 1.6;">Đang tải nhật ký hệ thống...</div>
+        <div id="logsBox" class="terminal-box" style="max-height: 420px; font-size: 12px; line-height: 1.5;">Đang tải nhật ký hệ thống...</div>
       </div>
     </div>
   </div>
 </div>
 
 <div id="toast"></div>
+
 
 <script>
   let currentStatus = {};
