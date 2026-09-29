@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """
 Cloudflare WARP Web Dashboard & Management API
+Multi-region Speed Test support (Germany, Singapore, Japan, USA, UK, Finland).
 Zero external dependencies - Uses Python 3 standard library.
 """
 
+import concurrent.futures
 import http.server
 import json
 import os
@@ -16,6 +18,57 @@ import urllib.parse
 
 PORT = int(os.environ.get("WARP_DASHBOARD_PORT", "8888"))
 HOST = os.environ.get("WARP_DASHBOARD_HOST", "0.0.0.0")
+
+DATA_CENTERS = {
+    "SG_SIN": {
+        "name": "Singapore (Hetzner DC)",
+        "country": "Singapore",
+        "flag": "🇸🇬",
+        "url": "https://sin-speed.hetzner.com/100MB.bin"
+    },
+    "JP_TYO": {
+        "name": "Nhật Bản (Tokyo, Linode)",
+        "country": "Nhật Bản",
+        "flag": "🇯🇵",
+        "url": "http://speedtest.tokyo2.linode.com/100MB-tokyo2.bin"
+    },
+    "DE_FSN": {
+        "name": "Đức (Falkenstein, Hetzner)",
+        "country": "Đức",
+        "flag": "🇩🇪",
+        "url": "https://fsn1-speed.hetzner.com/100MB.bin"
+    },
+    "DE_NBG": {
+        "name": "Đức (Nuremberg, Hetzner)",
+        "country": "Đức",
+        "flag": "🇩🇪",
+        "url": "https://nbg1-speed.hetzner.com/100MB.bin"
+    },
+    "US_ASH": {
+        "name": "Mỹ - Bờ Đông (Ashburn, Hetzner)",
+        "country": "Hoa Kỳ",
+        "flag": "🇺🇸",
+        "url": "https://ash-speed.hetzner.com/100MB.bin"
+    },
+    "US_HIL": {
+        "name": "Mỹ - Bờ Tây (Hillsboro, Hetzner)",
+        "country": "Hoa Kỳ",
+        "flag": "🇺🇸",
+        "url": "https://hil-speed.hetzner.com/100MB.bin"
+    },
+    "UK_LON": {
+        "name": "Anh Quốc (London, Linode)",
+        "country": "Vương quốc Anh",
+        "flag": "🇬🇧",
+        "url": "http://speedtest.london.linode.com/100MB-london.bin"
+    },
+    "FI_HEL": {
+        "name": "Phần Lan (Helsinki, Hetzner)",
+        "country": "Phần Lan",
+        "flag": "🇫🇮",
+        "url": "https://hel1-speed.hetzner.com/100MB.bin"
+    }
+}
 
 def run_cmd(cmd, timeout=15):
     """Run shell command and return stdout/stderr."""
@@ -36,19 +89,15 @@ def run_cmd(cmd, timeout=15):
 
 def get_warp_status():
     """Retrieve full status of WARP and system integrations."""
-    # 1. Check warp-cli status
     _, status_out, _ = run_cmd("warp-cli --accept-tos status 2>/dev/null || warp-cli status 2>/dev/null", timeout=5)
     is_connected = "Connected" in status_out
     
-    # 2. Check settings (port & mode)
     _, settings_out, _ = run_cmd("warp-cli --accept-tos settings list 2>/dev/null || warp-cli settings 2>/dev/null", timeout=5)
-    
     port_match = re.search(r"WarpProxy on port (\d+)", settings_out)
     if not port_match:
         port_match = re.search(r"port[:\s]+(\d+)", settings_out, re.IGNORECASE)
     proxy_port = int(port_match.group(1)) if port_match else 40000
 
-    # 3. Check curl trace via SOCKS5
     colo = "N/A"
     ip = "N/A"
     warp_on = False
@@ -63,7 +112,6 @@ def get_warp_status():
         if ip_m:
             ip = ip_m.group(1)
 
-    # 4. Check Docker proxy status
     docker_proxy_enabled = False
     docker_conf_path = "/etc/systemd/system/docker.service.d/http-proxy.conf"
     if os.path.exists(docker_conf_path):
@@ -72,7 +120,6 @@ def get_warp_status():
             if "HTTP_PROXY" in content and not content.strip().startswith("#"):
                 docker_proxy_enabled = True
 
-    # 5. Check Git proxy status
     _, git_proxy_out, _ = run_cmd("git config --global http.\"https://github.com/\".proxy")
     git_proxy_enabled = bool(git_proxy_out)
 
@@ -85,6 +132,39 @@ def get_warp_status():
         "docker_proxy": docker_proxy_enabled,
         "git_proxy": git_proxy_enabled,
         "raw_status": status_out or "WARP Service Offline"
+    }
+
+def benchmark_single_dc(dc_key, port):
+    """Benchmark a single datacenter endpoint."""
+    dc = DATA_CENTERS.get(dc_key)
+    if not dc:
+        return None
+    url = dc["url"]
+    t0 = time.time()
+    # Download 3MB chunk for snappy and accurate measurement
+    cmd = f"curl -m 7 --socks5-hostname 127.0.0.1:{port} -r 0-3145728 -s -w '%{{speed_download}},%{{time_starttransfer}},%{{time_total}}' -o /dev/null '{url}'"
+    _, out, _ = run_cmd(cmd, timeout=9)
+    duration = time.time() - t0
+    parts = out.split(",")
+    try:
+        speed_bytes = float(parts[0]) if len(parts) > 0 and parts[0] else 0.0
+        ttfb = float(parts[1]) if len(parts) > 1 and parts[1] else 0.0
+        total_t = float(parts[2]) if len(parts) > 2 and parts[2] else duration
+        speed_mb_s = speed_bytes / (1024 * 1024)
+        latency_ms = int(ttfb * 1000)
+    except Exception:
+        speed_mb_s = 0.0
+        latency_ms = 0
+        total_t = duration
+
+    return {
+        "id": dc_key,
+        "name": dc["name"],
+        "country": dc["country"],
+        "flag": dc["flag"],
+        "speed_mb_s": round(speed_mb_s, 2),
+        "latency_ms": latency_ms,
+        "duration_sec": round(total_t, 2)
     }
 
 HTML_TEMPLATE = r"""<!DOCTYPE html>
@@ -113,12 +193,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
       --text-muted: #9ca3af;
     }
 
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
-    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif; }
 
     body {
       background-color: var(--bg);
@@ -133,78 +208,39 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
       padding: 30px 20px;
     }
 
-    .container {
-      width: 100%;
-      max-width: 960px;
-    }
+    .container { width: 100%; max-width: 980px; }
 
-    /* Header */
-    header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 28px;
-    }
+    header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 28px; }
 
-    .brand {
-      display: flex;
-      align-items: center;
-      gap: 14px;
-    }
+    .brand { display: flex; align-items: center; gap: 14px; }
 
     .brand-logo {
-      width: 44px;
-      height: 44px;
+      width: 44px; height: 44px;
       background: linear-gradient(135deg, #f6821f, #ff5e3a);
       border-radius: 12px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      display: flex; align-items: center; justify-content: center;
       box-shadow: 0 8px 24px var(--primary-glow);
     }
 
-    .brand-logo svg {
-      width: 24px;
-      height: 24px;
-      fill: white;
-    }
-
-    .brand-text h1 {
-      font-size: 22px;
-      font-weight: 800;
-      letter-spacing: -0.5px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .brand-text p {
-      font-size: 13px;
-      color: var(--text-muted);
-    }
+    .brand-logo svg { width: 24px; height: 24px; fill: white; }
+    .brand-text h1 { font-size: 22px; font-weight: 800; letter-spacing: -0.5px; }
+    .brand-text p { font-size: 13px; color: var(--text-muted); }
 
     .badge-mode {
       background: rgba(16, 185, 129, 0.12);
       border: 1px solid rgba(16, 185, 129, 0.3);
       color: var(--success);
-      font-size: 12px;
-      font-weight: 600;
-      padding: 4px 10px;
-      border-radius: 20px;
-      display: flex;
-      align-items: center;
-      gap: 6px;
+      font-size: 12px; font-weight: 600;
+      padding: 4px 10px; border-radius: 20px;
+      display: flex; align-items: center; gap: 6px;
     }
 
     .badge-mode .dot {
-      width: 6px;
-      height: 6px;
-      background: var(--success);
-      border-radius: 50%;
+      width: 6px; height: 6px;
+      background: var(--success); border-radius: 50%;
       box-shadow: 0 0 8px var(--success);
     }
 
-    /* Grid Layout */
     .dashboard-grid {
       display: grid;
       grid-template-columns: repeat(12, 1fr);
@@ -224,271 +260,146 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
       transition: border-color 0.25s, transform 0.25s;
     }
 
-    .card:hover {
-      border-color: rgba(255, 255, 255, 0.15);
-    }
+    .card:hover { border-color: rgba(255, 255, 255, 0.15); }
 
-    .col-8 { grid-column: span 8; }
-    .col-4 { grid-column: span 4; }
+    .col-7 { grid-column: span 7; }
+    .col-5 { grid-column: span 5; }
     .col-6 { grid-column: span 6; }
     .col-12 { grid-column: span 12; }
 
-    @media (max-width: 768px) {
-      .col-8, .col-4, .col-6 { grid-column: span 12; }
+    @media (max-width: 820px) {
+      .col-7, .col-5, .col-6 { grid-column: span 12; }
     }
 
-    /* Status Card */
-    .status-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 20px;
-    }
-
-    .status-indicator {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
+    .status-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+    .status-indicator { display: flex; align-items: center; gap: 12px; }
 
     .status-pulse {
-      width: 14px;
-      height: 14px;
-      border-radius: 50%;
-      background: var(--success);
-      box-shadow: 0 0 16px var(--success);
-      position: relative;
+      width: 14px; height: 14px; border-radius: 50%;
+      background: var(--success); box-shadow: 0 0 16px var(--success);
     }
 
-    .status-pulse.disconnected {
-      background: var(--danger);
-      box-shadow: 0 0 16px var(--danger);
-    }
+    .status-pulse.disconnected { background: var(--danger); box-shadow: 0 0 16px var(--danger); }
+    .status-title { font-size: 18px; font-weight: 700; }
+    .status-subtitle { font-size: 13px; color: var(--text-muted); }
 
-    .status-title {
-      font-size: 18px;
-      font-weight: 700;
-    }
-
-    .status-subtitle {
-      font-size: 13px;
-      color: var(--text-muted);
-    }
-
-    .stats-row {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 14px;
-      margin-top: 18px;
-    }
+    .stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 18px; }
 
     .stat-box {
       background: rgba(255, 255, 255, 0.03);
       border: 1px solid rgba(255, 255, 255, 0.05);
-      border-radius: 12px;
-      padding: 12px 14px;
+      border-radius: 12px; padding: 12px 14px;
     }
 
-    .stat-label {
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      color: var(--text-muted);
-      margin-bottom: 4px;
-    }
+    .stat-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); margin-bottom: 4px; }
+    .stat-value { font-family: 'JetBrains Mono', monospace; font-size: 15px; font-weight: 600; color: var(--text); }
 
-    .stat-value {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 15px;
-      font-weight: 600;
-      color: var(--text);
-    }
+    .control-item { display: flex; justify-content: space-between; align-items: center; padding: 14px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.05); }
+    .control-item:last-child { border-bottom: none; padding-bottom: 0; }
+    .control-info h4 { font-size: 14px; font-weight: 600; margin-bottom: 3px; }
+    .control-info p { font-size: 12px; color: var(--text-muted); }
 
-    /* Controls Card */
-    .control-item {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 14px 0;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-    }
-
-    .control-item:last-child {
-      border-bottom: none;
-      padding-bottom: 0;
-    }
-
-    .control-info h4 {
-      font-size: 14px;
-      font-weight: 600;
-      margin-bottom: 3px;
-    }
-
-    .control-info p {
-      font-size: 12px;
-      color: var(--text-muted);
-    }
-
-    /* Switch Component */
-    .switch {
-      position: relative;
-      display: inline-block;
-      width: 48px;
-      height: 26px;
-    }
-
-    .switch input {
-      opacity: 0;
-      width: 0;
-      height: 0;
-    }
-
+    .switch { position: relative; display: inline-block; width: 48px; height: 26px; }
+    .switch input { opacity: 0; width: 0; height: 0; }
     .slider {
-      position: absolute;
-      cursor: pointer;
-      top: 0; left: 0; right: 0; bottom: 0;
+      position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
       background-color: rgba(255, 255, 255, 0.15);
       transition: .3s cubic-bezier(0.4, 0, 0.2, 1);
       border-radius: 34px;
     }
-
     .slider:before {
-      position: absolute;
-      content: "";
-      height: 20px;
-      width: 20px;
-      left: 3px;
-      bottom: 3px;
-      background-color: white;
-      transition: .3s cubic-bezier(0.4, 0, 0.2, 1);
+      position: absolute; content: ""; height: 20px; width: 20px; left: 3px; bottom: 3px;
+      background-color: white; transition: .3s cubic-bezier(0.4, 0, 0.2, 1);
       border-radius: 50%;
     }
+    input:checked + .slider { background-color: var(--primary); box-shadow: 0 0 12px var(--primary-glow); }
+    input:checked + .slider:before { transform: translateX(22px); }
 
-    input:checked + .slider {
-      background-color: var(--primary);
-      box-shadow: 0 0 12px var(--primary-glow);
-    }
-
-    input:checked + .slider:before {
-      transform: translateX(22px);
-    }
-
-    /* Buttons */
     .btn {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      font-size: 13px;
-      font-weight: 600;
-      padding: 10px 16px;
-      border-radius: 10px;
-      border: none;
-      cursor: pointer;
-      transition: all 0.2s;
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      font-size: 13px; font-weight: 600; padding: 9px 15px; border-radius: 10px;
+      border: none; cursor: pointer; transition: all 0.2s;
     }
+    .btn-primary { background: var(--primary); color: white; box-shadow: 0 4px 16px var(--primary-glow); }
+    .btn-primary:hover { background: var(--primary-hover); transform: translateY(-1px); }
+    .btn-secondary { background: rgba(255, 255, 255, 0.08); color: var(--text); border: 1px solid rgba(255, 255, 255, 0.1); }
+    .btn-secondary:hover { background: rgba(255, 255, 255, 0.14); }
+    .btn-accent { background: rgba(0, 210, 255, 0.15); color: var(--accent); border: 1px solid rgba(0, 210, 255, 0.3); }
+    .btn-accent:hover { background: rgba(0, 210, 255, 0.25); }
+    .btn-sm { padding: 6px 12px; font-size: 12px; }
 
-    .btn-primary {
-      background: var(--primary);
-      color: white;
-      box-shadow: 0 4px 16px var(--primary-glow);
-    }
-
-    .btn-primary:hover {
-      background: var(--primary-hover);
-      transform: translateY(-1px);
-    }
-
-    .btn-secondary {
-      background: rgba(255, 255, 255, 0.08);
+    .select-style {
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.15);
       color: var(--text);
-      border: 1px solid rgba(255, 255, 255, 0.1);
+      padding: 7px 12px;
+      border-radius: 8px;
+      font-size: 12px;
+      outline: none;
+      width: 100%;
+      cursor: pointer;
+    }
+    .select-style option {
+      background: #111827;
+      color: white;
     }
 
-    .btn-secondary:hover {
-      background: rgba(255, 255, 255, 0.14);
-    }
+    .speed-gauge { text-align: center; padding: 12px 0; }
+    .speed-number { font-family: 'JetBrains Mono', monospace; font-size: 36px; font-weight: 800; color: var(--accent); }
 
-    .btn-sm {
-      padding: 6px 12px;
+    .benchmark-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 14px;
       font-size: 12px;
     }
+    .benchmark-table th {
+      text-align: left;
+      padding: 8px 10px;
+      color: var(--text-muted);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      font-weight: 600;
+      text-transform: uppercase;
+      font-size: 11px;
+    }
+    .benchmark-table td {
+      padding: 9px 10px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    }
+    .benchmark-table tr:last-child td { border-bottom: none; }
 
-    /* Terminal & Logs */
     .terminal-box {
       background: #04070d;
       border: 1px solid rgba(255, 255, 255, 0.06);
-      border-radius: 12px;
-      padding: 16px;
+      border-radius: 12px; padding: 16px;
       font-family: 'JetBrains Mono', monospace;
-      font-size: 12px;
-      color: #94a3b8;
-      max-height: 180px;
-      overflow-y: auto;
-      white-space: pre-wrap;
-      line-height: 1.6;
+      font-size: 12px; color: #94a3b8;
+      max-height: 180px; overflow-y: auto;
+      white-space: pre-wrap; line-height: 1.6;
     }
 
     .code-snippet {
       background: rgba(0, 0, 0, 0.35);
       border: 1px solid rgba(255, 255, 255, 0.08);
-      border-radius: 10px;
-      padding: 12px 14px;
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 12px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-top: 8px;
+      border-radius: 10px; padding: 12px 14px;
+      font-family: 'JetBrains Mono', monospace; font-size: 12px;
+      display: flex; justify-content: space-between; align-items: center; margin-top: 8px;
     }
+    .code-snippet code { color: var(--accent); overflow-x: auto; }
 
-    .code-snippet code {
-      color: var(--accent);
-      overflow-x: auto;
-    }
-
-    /* Toast Notification */
     #toast {
-      position: fixed;
-      bottom: 24px;
-      right: 24px;
-      background: #1e293b;
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      color: white;
-      padding: 12px 20px;
-      border-radius: 12px;
+      position: fixed; bottom: 24px; right: 24px;
+      background: #1e293b; border: 1px solid rgba(255, 255, 255, 0.1);
+      color: white; padding: 12px 20px; border-radius: 12px;
       box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
-      display: none;
-      align-items: center;
-      gap: 10px;
-      font-size: 13px;
-      font-weight: 500;
-      z-index: 999;
-      animation: slideIn 0.3s ease-out;
-    }
-
-    @keyframes slideIn {
-      from { transform: translateY(20px); opacity: 0; }
-      to { transform: translateY(0); opacity: 1; }
-    }
-
-    .speed-gauge {
-      text-align: center;
-      padding: 16px 0;
-    }
-
-    .speed-number {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 38px;
-      font-weight: 800;
-      color: var(--accent);
+      display: none; align-items: center; gap: 10px;
+      font-size: 13px; font-weight: 500; z-index: 999;
     }
   </style>
 </head>
 <body>
 
 <div class="container">
-  <!-- Header -->
   <header>
     <div class="brand">
       <div class="brand-logo">
@@ -505,11 +416,10 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     </div>
   </header>
 
-  <!-- Main Grid -->
   <div class="dashboard-grid">
     
-    <!-- Status Card (Col 8) -->
-    <div class="card col-8">
+    <!-- Status Card -->
+    <div class="card col-7">
       <div class="status-header">
         <div class="status-indicator">
           <div id="statusDot" class="status-pulse"></div>
@@ -539,26 +449,59 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
       </div>
     </div>
 
-    <!-- Quick Speed Test Card (Col 4) -->
-    <div class="card col-4">
+    <!-- Multi-region Speed Test Card -->
+    <div class="card col-5">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-        <h3 style="font-size: 15px; font-weight: 700;">Kiểm tra Tốc độ</h3>
-        <button onclick="runSpeedTest()" id="testSpeedBtn" class="btn btn-secondary btn-sm">▶ Đo tốc độ</button>
+        <h3 style="font-size: 15px; font-weight: 700;">Kiểm Tra Tốc Độ Đa Quốc Gia</h3>
       </div>
-      <div class="speed-gauge">
-        <div id="speedResult" class="speed-number">--</div>
-        <div id="speedUnit" style="font-size: 12px; color: var(--text-muted);">MB/s (Hetzner Germany)</div>
+      
+      <div style="margin-bottom: 12px;">
+        <select id="regionSelect" class="select-style">
+          <option value="SG_SIN">🇸🇬 Singapore (Hetzner DC)</option>
+          <option value="JP_TYO">🇯🇵 Nhật Bản (Tokyo, Linode)</option>
+          <option value="DE_FSN" selected>🇩🇪 Đức (Falkenstein, Hetzner)</option>
+          <option value="DE_NBG">🇩🇪 Đức (Nuremberg, Hetzner)</option>
+          <option value="US_ASH">🇺🇸 Mỹ - Bờ Đông (Ashburn, Hetzner)</option>
+          <option value="US_HIL">🇺🇸 Mỹ - Bờ Tây (Hillsboro, Hetzner)</option>
+          <option value="UK_LON">🇬🇧 Anh Quốc (London, Linode)</option>
+          <option value="FI_HEL">🇫🇮 Phần Lan (Helsinki, Hetzner)</option>
+          <option value="ALL">🚀 Đo TOÀN BỘ các Data Center (Benchmark All)</option>
+        </select>
       </div>
-      <div id="speedDetail" style="font-size: 11px; text-align: center; color: var(--text-muted); margin-top: 8px;">
-        So sánh đường truyền xuyên lục địa qua WARP
+
+      <div style="display: flex; gap: 8px; margin-bottom: 14px;">
+        <button onclick="runSpeedTest()" id="testSpeedBtn" class="btn btn-secondary btn-sm" style="flex: 1;">▶ Bắt đầu đo</button>
+      </div>
+
+      <div id="singleResultBox">
+        <div class="speed-gauge">
+          <div id="speedResult" class="speed-number">--</div>
+          <div id="speedUnit" style="font-size: 12px; color: var(--text-muted);">MB/s</div>
+        </div>
+        <div id="speedDetail" style="font-size: 11px; text-align: center; color: var(--text-muted);">
+          Chọn Data Center và nhấn "Bắt đầu đo"
+        </div>
+      </div>
+
+      <!-- Multi Results Table -->
+      <div id="allResultsBox" style="display: none; max-height: 180px; overflow-y: auto;">
+        <table class="benchmark-table">
+          <thead>
+            <tr>
+              <th>Data Center</th>
+              <th>Tốc độ</th>
+              <th>Độ trễ</th>
+            </tr>
+          </thead>
+          <tbody id="allResultsTbody"></tbody>
+        </table>
       </div>
     </div>
 
-    <!-- Integrations & Toggles (Col 12) -->
+    <!-- Smart Routing Toggles -->
     <div class="card col-12">
       <h3 style="font-size: 16px; font-weight: 700; margin-bottom: 16px;">Cấu hình Điều hướng Thông minh (Smart Routing)</h3>
 
-      <!-- Docker Daemon -->
       <div class="control-item">
         <div class="control-info">
           <h4>Proxy cho Docker Daemon (Kèm NO_PROXY Docker Hub)</h4>
@@ -570,7 +513,6 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         </label>
       </div>
 
-      <!-- Git CLI -->
       <div class="control-item">
         <div class="control-info">
           <h4>Tăng tốc Git CLI cho GitHub (https://github.com/)</h4>
@@ -582,7 +524,6 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         </label>
       </div>
 
-      <!-- Port Configuration -->
       <div class="control-item">
         <div class="control-info">
           <h4>Đổi Cổng SOCKS5 Proxy</h4>
@@ -595,7 +536,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
       </div>
     </div>
 
-    <!-- Quick Commands (Col 6) -->
+    <!-- Quick Commands -->
     <div class="card col-6">
       <h3 style="font-size: 15px; font-weight: 700; margin-bottom: 10px;">Lệnh Dòng Lệnh Nhanh (On-Demand)</h3>
       <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 10px;">Bật proxy tạm thời cho toàn bộ phiên làm việc của terminal:</p>
@@ -611,7 +552,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
       </div>
     </div>
 
-    <!-- Logs Box (Col 6) -->
+    <!-- Logs Box -->
     <div class="card col-6">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
         <h3 style="font-size: 15px; font-weight: 700;">Nhật Ký Dịch Vụ (warp-svc)</h3>
@@ -731,25 +672,69 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
   }
 
   async function runSpeedTest() {
+    const region = document.getElementById('regionSelect').value;
     const btn = document.getElementById('testSpeedBtn');
+    const singleBox = document.getElementById('singleResultBox');
+    const allBox = document.getElementById('allResultsBox');
     const resultBox = document.getElementById('speedResult');
+    const detailBox = document.getElementById('speedDetail');
+
     btn.disabled = true;
     btn.innerText = 'Đang đo...';
-    resultBox.innerText = '...';
-    showToast('Đang tải dữ liệu đo tốc độ từ Hetzner (Đức)...');
+    showToast('Đang kết nối đo kiểm tốc độ...');
 
-    try {
-      const res = await fetch('/api/test-speed', { method: 'POST' });
-      const data = await res.json();
-      resultBox.innerText = data.speed_mb_s ? data.speed_mb_s.toFixed(2) : '0';
-      document.getElementById('speedDetail').innerText = `Thời gian tải: ${data.duration_sec.toFixed(1)}s | Cổng: 127.0.0.1:${data.port}`;
-      showToast('Đo tốc độ hoàn tất!');
-    } catch (e) {
-      resultBox.innerText = 'Lỗi';
-      showToast('Lỗi khi đo tốc độ: ' + e);
-    } finally {
-      btn.disabled = false;
-      btn.innerText = '▶ Đo tốc độ';
+    if (region === 'ALL') {
+      singleBox.style.display = 'none';
+      allBox.style.display = 'block';
+      const tbody = document.getElementById('allResultsTbody');
+      tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:#9ca3af; padding:15px;">Đang lần lượt đo kiểm các trạm toàn cầu...</td></tr>';
+
+      try {
+        const res = await fetch('/api/test-speed', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ region: 'ALL' })
+        });
+        const data = await res.json();
+        tbody.innerHTML = '';
+        data.results.forEach(r => {
+          const row = document.createElement('tr');
+          row.innerHTML = `
+            <td><strong>${r.flag}</strong> ${r.name}</td>
+            <td style="font-family:'JetBrains Mono'; color:#00d2ff; font-weight:700;">${r.speed_mb_s} MB/s</td>
+            <td style="font-family:'JetBrains Mono'; color:#9ca3af;">${r.latency_ms} ms</td>
+          `;
+          tbody.appendChild(row);
+        });
+        showToast('Đã đo xong toàn bộ các Data Center!');
+      } catch (e) {
+        tbody.innerHTML = `<tr><td colspan="3" style="color:#ef4444;">Lỗi: ${e}</td></tr>`;
+      } finally {
+        btn.disabled = false;
+        btn.innerText = '▶ Bắt đầu đo';
+      }
+    } else {
+      allBox.style.display = 'none';
+      singleBox.style.display = 'block';
+      resultBox.innerText = '...';
+
+      try {
+        const res = await fetch('/api/test-speed', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ region })
+        });
+        const r = await res.json();
+        resultBox.innerText = r.speed_mb_s ? r.speed_mb_s.toFixed(2) : '0';
+        detailBox.innerText = `${r.flag} ${r.name} | Độ trễ: ${r.latency_ms}ms | Thời gian: ${r.duration_sec}s`;
+        showToast(`Đo tốc độ trạm ${r.country} hoàn tất!`);
+      } catch (e) {
+        resultBox.innerText = 'Lỗi';
+        detailBox.innerText = 'Không thể đo kiểm: ' + e;
+      } finally {
+        btn.disabled = false;
+        btn.innerText = '▶ Bắt đầu đo';
+      }
     }
   }
 
@@ -778,7 +763,6 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     showToast('Đã sao chép vào bộ nhớ tạm!');
   }
 
-  // Initial load
   fetchStatus();
   loadLogs();
   setInterval(fetchStatus, 10000);
@@ -790,7 +774,6 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 
 class WarpAPIHandler(http.server.BaseHTTPRequestHandler):
     def log_message(self, format, *args):
-        # Silence access logs to keep terminal tidy
         pass
 
     def send_json(self, data, code=200):
@@ -815,6 +798,10 @@ class WarpAPIHandler(http.server.BaseHTTPRequestHandler):
         if path == "/api/status":
             status = get_warp_status()
             self.send_json(status)
+            return
+
+        if path == "/api/regions":
+            self.send_json(DATA_CENTERS)
             return
 
         if path == "/api/logs":
@@ -890,27 +877,31 @@ Environment="NO_PROXY=localhost,127.0.0.1,docker.io,*.docker.io,*.docker.com,pro
             return
 
         if path == "/api/test-speed":
+            region = req_data.get("region", "DE_FSN")
             status = get_warp_status()
             port = status.get("port", 40000)
-            test_url = "https://fsn1-speed.hetzner.com/100MB.bin"
-            # Download 10MB chunk to benchmark fast
-            t0 = time.time()
-            cmd = f"curl -m 12 --socks5-hostname 127.0.0.1:{port} -r 0-10485760 -o /dev/null -s -w '%{{speed_download}}' {test_url}"
-            _, speed_bytes_str, _ = run_cmd(cmd, timeout=15)
-            duration = time.time() - t0
-            try:
-                speed_bytes = float(speed_bytes_str.replace(",", "."))
-                speed_mb_s = speed_bytes / (1024 * 1024)
-            except Exception:
-                speed_mb_s = 0.0
 
-            self.send_json({
-                "success": True,
-                "port": port,
-                "duration_sec": duration,
-                "speed_mb_s": speed_mb_s
-            })
-            return
+            if region == "ALL":
+                results = []
+                with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+                    future_to_key = {executor.submit(benchmark_single_dc, k, port): k for k in DATA_CENTERS.keys()}
+                    for future in concurrent.futures.as_completed(future_to_key):
+                        res = future.result()
+                        if res:
+                            results.append(res)
+                # Keep original order
+                order = list(DATA_CENTERS.keys())
+                results.sort(key=lambda x: order.index(x["id"]) if x["id"] in order else 99)
+                self.send_json({"success": True, "results": results})
+                return
+            else:
+                target_key = region if region in DATA_CENTERS else "DE_FSN"
+                res = benchmark_single_dc(target_key, port)
+                if res:
+                    self.send_json(res)
+                else:
+                    self.send_json({"success": False, "error": "Invalid region"}, code=400)
+                return
 
         self.send_response(404)
         self.end_headers()

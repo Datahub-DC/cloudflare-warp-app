@@ -81,12 +81,120 @@ pause() {
     read -rp "Nhấn [Enter] để quay lại menu..." _
 }
 
-speed_test() {
+speed_test_dc() {
+    local name="$1"
+    local flag="$2"
+    local url="$3"
+    local port="$4"
+
+    echo -ne "  Đang đo tới: ${flag} ${BOLD}${name}${NC}... "
+    local res
+    res=$(curl -m 8 --socks5-hostname 127.0.0.1:"$port" -r 0-3145728 -s -w "%{speed_download},%{time_starttransfer},%{time_total}" -o /dev/null "$url")
+    
+    local speed_raw ttfb total_t speed_mb latency_ms
+    speed_raw=$(echo "$res" | cut -d, -f1)
+    ttfb=$(echo "$res" | cut -d, -f2)
+    total_t=$(echo "$res" | cut -d, -f3)
+
+    if [ -n "$speed_raw" ] && [ "$speed_raw" != "0" ]; then
+        speed_mb=$(awk -v s="$speed_raw" 'BEGIN { printf "%.2f", s / 1048576 }')
+        latency_ms=$(awk -v t="$ttfb" 'BEGIN { printf "%d", t * 1000 }')
+        echo -e "${GREEN}Xong!${NC}"
+        echo -e "  ➜ Tốc độ: ${CYAN}${BOLD}${speed_mb} MB/s${NC} | Độ trễ: ${YELLOW}${latency_ms} ms${NC} | Thời gian: ${total_t}s"
+    else
+        echo -e "${RED}Thất bại / Timeout${NC}"
+    fi
+}
+
+speed_test_menu() {
     local port
     port=$(get_current_port)
-    echo -e "${BLUE}==>${NC} ${BOLD}Đang kiểm tra tốc độ tải file từ Hetzner (Đức) qua WARP...${NC}"
-    echo -e "    Cổng proxy: 127.0.0.1:${port}"
-    curl --socks5-hostname 127.0.0.1:"$port" -o /dev/null -w "\n  Tốc độ tải qua WARP : %{speed_download} bytes/sec (~%{speed_download} / 1048576 MB/s)\n  Thời gian kết nối   : %{time_connect}s\n  Tổng thời gian      : %{time_total}s\n" https://fsn1-speed.hetzner.com/100MB.bin
+    while true; do
+        clear_screen
+        echo -e "${CYAN}╔══════════════════════════════════════════════════════════════════════╗${NC}"
+        echo -e "${CYAN}║${NC}   ${BOLD}${YELLOW}ĐO KIỂM TỐC ĐỘ MẠNG ĐA QUỐC GIA QUA WARP SOCKS5${NC}                  ${CYAN}║${NC}"
+        echo -e "${CYAN}╚══════════════════════════════════════════════════════════════════════╝${NC}"
+        echo -e "  Cổng Proxy: ${YELLOW}127.0.0.1:${port}${NC}"
+        echo -e "${CYAN}──────────────────────────────────────────────────────────────────────${NC}"
+        echo -e "  ${BOLD}[1]${NC} 🇸🇬 Singapore (Hetzner DC)"
+        echo -e "  ${BOLD}[2]${NC} 🇯🇵 Nhật Bản (Tokyo, Linode DC)"
+        echo -e "  ${BOLD}[3]${NC} 🇩🇪 Đức (Falkenstein, Hetzner DC)"
+        echo -e "  ${BOLD}[4]${NC} 🇩🇪 Đức (Nuremberg, Hetzner DC)"
+        echo -e "  ${BOLD}[5]${NC} 🇺🇸 Mỹ - Bờ Đông (Ashburn Virginia, Hetzner)"
+        echo -e "  ${BOLD}[6]${NC} 🇺🇸 Mỹ - Bờ Tây (Hillsboro Oregon, Hetzner)"
+        echo -e "  ${BOLD}[7]${NC} 🇬🇧 Anh Quốc (London, Linode DC)"
+        echo -e "  ${BOLD}[8]${NC} 🇫🇮 Phần Lan (Helsinki, Hetzner DC)"
+        echo -e "  ${BOLD}[9]${NC} 🚀 ${BOLD}Đo kiểm TOÀN BỘ các Data Center (Benchmark All)${NC}"
+        echo -e "  ${BOLD}[0]${NC} Quay lại Menu chính"
+        echo -e "${CYAN}──────────────────────────────────────────────────────────────────────${NC}"
+        read -rp "Chọn Data Center để đo kiểm [0-9]: " dc_choice
+
+        case "$dc_choice" in
+            1)
+                echo ""
+                speed_test_dc "Singapore (Hetzner)" "🇸🇬" "https://sin-speed.hetzner.com/100MB.bin" "$port"
+                pause
+                ;;
+            2)
+                echo ""
+                speed_test_dc "Nhật Bản (Tokyo, Linode)" "🇯🇵" "http://speedtest.tokyo2.linode.com/100MB-tokyo2.bin" "$port"
+                pause
+                ;;
+            3)
+                echo ""
+                speed_test_dc "Đức (Falkenstein, Hetzner)" "🇩🇪" "https://fsn1-speed.hetzner.com/100MB.bin" "$port"
+                pause
+                ;;
+            4)
+                echo ""
+                speed_test_dc "Đức (Nuremberg, Hetzner)" "🇩🇪" "https://nbg1-speed.hetzner.com/100MB.bin" "$port"
+                pause
+                ;;
+            5)
+                echo ""
+                speed_test_dc "Mỹ - Bờ Đông (Ashburn)" "🇺🇸" "https://ash-speed.hetzner.com/100MB.bin" "$port"
+                pause
+                ;;
+            6)
+                echo ""
+                speed_test_dc "Mỹ - Bờ Tây (Hillsboro)" "🇺🇸" "https://hil-speed.hetzner.com/100MB.bin" "$port"
+                pause
+                ;;
+            7)
+                echo ""
+                speed_test_dc "Anh Quốc (London, Linode)" "🇬🇧" "http://speedtest.london.linode.com/100MB-london.bin" "$port"
+                pause
+                ;;
+            8)
+                echo ""
+                speed_test_dc "Phần Lan (Helsinki, Hetzner)" "🇫🇮" "https://hel1-speed.hetzner.com/100MB.bin" "$port"
+                pause
+                ;;
+            9)
+                echo ""
+                echo -e "${BLUE}==>${NC} ${BOLD}Bắt đầu đo kiểm toàn bộ 8 Data Center quốc tế...${NC}"
+                echo ""
+                speed_test_dc "Singapore (Hetzner)" "🇸🇬" "https://sin-speed.hetzner.com/100MB.bin" "$port"
+                speed_test_dc "Nhật Bản (Tokyo, Linode)" "🇯🇵" "http://speedtest.tokyo2.linode.com/100MB-tokyo2.bin" "$port"
+                speed_test_dc "Đức (Falkenstein, Hetzner)" "🇩🇪" "https://fsn1-speed.hetzner.com/100MB.bin" "$port"
+                speed_test_dc "Đức (Nuremberg, Hetzner)" "🇩🇪" "https://nbg1-speed.hetzner.com/100MB.bin" "$port"
+                speed_test_dc "Mỹ - Bờ Đông (Ashburn)" "🇺🇸" "https://ash-speed.hetzner.com/100MB.bin" "$port"
+                speed_test_dc "Mỹ - Bờ Tây (Hillsboro)" "🇺🇸" "https://hil-speed.hetzner.com/100MB.bin" "$port"
+                speed_test_dc "Anh Quốc (London, Linode)" "🇬🇧" "http://speedtest.london.linode.com/100MB-london.bin" "$port"
+                speed_test_dc "Phần Lan (Helsinki, Hetzner)" "🇫🇮" "https://hel1-speed.hetzner.com/100MB.bin" "$port"
+                echo ""
+                echo -e "${GREEN}Đã hoàn thành đo kiểm toàn bộ!${NC}"
+                pause
+                ;;
+            0)
+                break
+                ;;
+            *)
+                echo -e "${RED}Lựa chọn không hợp lệ!${NC}"
+                sleep 1
+                ;;
+        esac
+    done
 }
 
 toggle_docker() {
@@ -206,8 +314,7 @@ while true; do
             pause
             ;;
         6)
-            speed_test
-            pause
+            speed_test_menu
             ;;
         7)
             start_web_dashboard

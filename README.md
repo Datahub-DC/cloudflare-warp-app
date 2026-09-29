@@ -102,7 +102,7 @@ Giao diện Web siêu nhẹ (chạy bằng Python 3 có sẵn, không cần cài
 * **Bật / Tắt Proxy cho Docker** (tự động cấu hình `NO_PROXY` cho Docker Hub để không bị bóp băng thông).
 * **Bật / Tắt Proxy cho GitHub CLI** (`github.com`).
 * **Đổi cổng SOCKS5 Proxy** trực quan.
-* **Đo tốc độ mạng trực tiếp (Speed Test)** kết nối Hetzner châu Âu.
+* **Đo tốc độ mạng Đa Quốc Gia (Multi-Region Speed Test):** Đo kiểm tốc độ và độ trễ tới 8 Data Center quốc tế (🇸🇬 Singapore, 🇯🇵 Nhật Bản, 🇩🇪 Đức, 🇺🇸 Mỹ Bờ Đông/Tây, 🇬🇧 Anh Quốc, 🇫🇮 Phần Lan) hoặc chạy Benchmark toàn bộ cùng lúc.
 * **Xem nhật ký dịch vụ (Real-time Logs)**.
 
 ```bash
