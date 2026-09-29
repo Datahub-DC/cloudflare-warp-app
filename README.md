@@ -2,7 +2,7 @@
 
 Công cụ tự động hóa cài đặt, cấu hình và quản trị **Cloudflare WARP** cho máy chủ Linux (Data Center / VPS / Cloud). Hoàn toàn miễn phí, **an toàn tuyệt đối cho kết nối SSH**, tương thích toàn diện với tất cả các phiên bản Ubuntu từ 20.04 đến 26.04 LTS.
 
-Tích hợp sẵn **Web Dashboard Dark Glassmorphism 5 Tabs** có đăng nhập bảo mật và **Terminal Menu (TUI)** tiện lợi, không cần ghi nhớ các câu lệnh phức tạp.
+Tích hợp sẵn **Web Dashboard Dark Glassmorphism 6 Tabs** có đăng nhập bảo mật và **Terminal Menu (TUI)** tiện lợi, không cần ghi nhớ các câu lệnh phức tạp.
 
 ---
 
@@ -12,7 +12,7 @@ Tích hợp sẵn **Web Dashboard Dark Glassmorphism 5 Tabs** có đăng nhập 
 3. [Cài đặt nhanh trong 1 dòng lệnh](#-cài-đặt-nhanh-trong-1-dòng-lệnh)
 4. [Mô hình Định tuyến Thông minh (Smart Routing)](#-mô-hình-định-tuyến-thông-minh-smart-routing)
 5. [Giao diện Trực quan (Web UI & TUI)](#-giao-diện-trực-quan-thay-vì-gõ-lệnh-cli)
-   - [Web Dashboard 5 Tabs](#1--web-dashboard-hiện-đại--bảo-mật-trên-trình-duyệt)
+   - [Web Dashboard 6 Tabs](#1--web-dashboard-hiện-đại--bảo-mật-trên-trình-duyệt)
    - [Terminal Interactive Menu](#2--terminal-interactive-menu-tui-trong-ssh)
 6. [Tăng tốc GitLab CI/CD & Runner](#-tăng-tốc-gitlab-cicd-pipeline--gitlab-runner)
 7. [Hướng dẫn Sử dụng CLI](#-hướng-dẫn-sử-dụng-sau-khi-cài-đặt)
@@ -72,6 +72,7 @@ Hệ thống cho phép định tuyến chọn lọc từng dịch vụ đi qua W
 | :--- | :--- | :--- | :--- |
 | **SSH / Web / DB** | 🟢 Đi trực tiếp (Direct) | Nguyên bản | Giữ an toàn và phản hồi tức thì cho người quản trị |
 | **Docker Hub** | 🟢 Đi trực tiếp (`NO_PROXY`) | ~200 Mbps | Tải image từ Docker Hub nội địa cực nhanh, không qua VPN |
+| **Docker Daemon & Build** | ⚡ Qua WARP SOCKS5 | Cực nhanh | Kéo registry quốc tế (ghcr.io, quay.io, gcr.io) và cài đặt pip/npm trong container |
 | **GitHub CLI** | ⚡ Qua WARP SOCKS5 | Cực nhanh | Khắc phục đứt cáp, tăng tốc `git clone/fetch/push` |
 | **GitLab Quốc tế** | ⚡ Qua WARP SOCKS5 | Cực nhanh | Khắc phục tình trạng treo khi kéo code từ `gitlab.com` |
 | **GitLab CI/CD Runner**| ⚡ Qua WARP SOCKS5 | Tối đa | Tăng tốc tải NPM, PyPI, Maven, Go module và images |
@@ -83,7 +84,7 @@ Hệ thống cho phép định tuyến chọn lọc từng dịch vụ đi qua W
 Để người dùng không cần phải ghi nhớ các câu lệnh phức tạp, công cụ hỗ trợ **2 loại giao diện trực quan**:
 
 ### 1. 🌐 Web Dashboard Hiện Đại & Bảo Mật (Trên trình duyệt)
-Giao diện Web siêu nhẹ (chạy bằng Python 3 standard library có sẵn, không cần cài thêm bất kỳ thư viện pip nào):
+Giao diện Web siêu nhẹ (chạy bằng Python 3 standard library có sẵn, không cần cài thêm bất kỳ thư viện pip nào, hỗ trợ `ThreadingTCPServer` xử lý đa luồng mượt mà):
 
 ```bash
 # Khởi chạy Web Dashboard trực tiếp:
@@ -96,7 +97,7 @@ sudo bash install.sh --dashboard-service
 ```
 *Truy cập trình duyệt tại:* **`http://<IP_MAY_CHU>:8888`** *(Hoặc `http://127.0.0.1:8888`)*
 
-#### 📑 Cấu trúc 5 Tab Chuyên Biệt & Tiện Lợi:
+#### 📑 Cấu trúc 6 Tab Chuyên Biệt & Tiện Lợi:
 1. 📊 **Tổng quan & Kết nối (`#overview`):**
    * Theo dõi trạng thái Anycast thời gian thực (`status-pulse`), trạm PoP (VD: `SIN - Singapore`), cổng SOCKS5 Local, Egress IP Public.
    * Nút **Bật / Tắt WARP** nhanh với 1 cú click.
@@ -112,11 +113,23 @@ sudo bash install.sh --dashboard-service
    * Công tắc tăng tốc riêng cho **GitLab CLI** (`gitlab.com`).
    * Ô đổi cổng SOCKS5 Proxy trực tiếp (1024 - 65535).
    * Hướng dẫn cấu hình Privoxy chuyển đổi HTTP Proxy sang SOCKS5.
-4. 🦊 **GitLab CI/CD (`#gitlab`):**
+4. 🐳 **Docker Daemon Proxy & Build Console (`#docker`):**
+   * **Quản lý Proxy Docker Daemon & Systemd:**
+     - Xem trực quan trạng thái daemon (`docker info`), phiên bản Docker, địa chỉ Proxy, trạng thái file cấu hình systemd.
+     - Tùy chỉnh danh sách `NO_PROXY` trực tiếp với các Preset 1-click: *Khuyên dùng (Docker Hub + Mạng nội bộ)*, *Toàn bộ qua WARP*, *Kubernetes / Internal LAN*.
+     - Nút **⚡ Áp Dụng & Reload Daemon** (`systemctl daemon-reload && systemctl restart docker`) tự động nạp cấu hình mới mà không làm đứt kết nối máy chủ.
+     - Nút **🛑 Tắt Proxy Docker** để khôi phục mặc định.
+   * **Trình Thực Thi Lệnh Docker Build Trực Tiếp:**
+     - Tích hợp sẵn các mẫu Dockerfile phổ biến: 🏔️ *Alpine + cURL*, 🐍 *Python + Pip Packages*, 🟩 *Node.js + NPM Express*, 🐙 *Git Clone Repo*, ✏️ *Custom Dockerfile*.
+     - Tùy chỉnh Tag Name Image (VD: `warp-build-test:latest`).
+     - Tùy chọn build nâng cao: Tự động inject `--build-arg HTTP_PROXY=socks5://127.0.0.1:40000`, `--network host` (bắt buộc để kết nối SOCKS5 host), `--no-cache`, và tự động dọn dẹp image.
+     - Hộp hiển thị Live Terminal Console với BuildKit logs chi tiết, mã thoát (Exit Code), thời gian đo kiểm thực tế (giây).
+     - Nút **🗑️ Dọn Image** để giải phóng dung lượng đĩa và nút **🧹 Xóa Console**.
+5. 🦊 **GitLab CI/CD (`#gitlab`):**
    * Cấu hình sẵn khối biến môi trường cho `.gitlab-ci.yml` (kèm nút Copy).
    * Cấu hình mẫu cho `/etc/gitlab-runner/config.toml` với `network_mode = "host"` (kèm nút Copy).
    * Liên kết trực tiếp tới file mẫu `gitlab-ci.example.yml` và `gitlab-runner.example.toml`.
-5. 📋 **Nhật ký & Chẩn đoán (`#logs`):**
+6. 📋 **Nhật ký & Chẩn đoán (`#logs`):**
    * Xem trực tiếp log dịch vụ `warp-svc` theo thời gian thực trên giao diện terminal.
    * Hỗ trợ checkbox **Tự động làm mới (5s)** và nút làm mới thủ công.
 

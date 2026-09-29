@@ -21,6 +21,7 @@ import secrets
 import socketserver
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.parse
 
@@ -193,6 +194,46 @@ def run_cmd(cmd, timeout=15):
     except Exception as e:
         return -1, "", str(e)
 
+def get_docker_info():
+    conf_path = "/etc/systemd/system/docker.service.d/http-proxy.conf"
+    conf_exists = os.path.exists(conf_path)
+    raw_conf = ""
+    if conf_exists:
+        try:
+            with open(conf_path, "r") as f:
+                raw_conf = f.read()
+        except Exception:
+            pass
+
+    try:
+        out = subprocess.check_output(["docker", "info"], stderr=subprocess.STDOUT, text=True, timeout=5)
+        http_p = re.search(r"HTTP Proxy:\s*(.+)", out)
+        https_p = re.search(r"HTTPS Proxy:\s*(.+)", out)
+        no_p = re.search(r"No Proxy:\s*(.+)", out)
+        ver = re.search(r"Server Version:\s*(.+)", out)
+        return {
+            "installed": True,
+            "running": True,
+            "version": ver.group(1).strip() if ver else "Unknown",
+            "http_proxy": http_p.group(1).strip() if http_p else "",
+            "https_proxy": https_p.group(1).strip() if https_p else "",
+            "no_proxy": no_p.group(1).strip() if no_p else "",
+            "conf_exists": conf_exists,
+            "raw_conf": raw_conf
+        }
+    except Exception as e:
+        return {
+            "installed": True if os.path.exists("/usr/bin/docker") else False,
+            "running": False,
+            "version": "",
+            "http_proxy": "",
+            "https_proxy": "",
+            "no_proxy": "",
+            "conf_exists": conf_exists,
+            "raw_conf": raw_conf,
+            "error": str(e)
+        }
+
 def get_warp_status():
     _, status_out, _ = run_cmd("warp-cli --accept-tos status 2>/dev/null || warp-cli status 2>/dev/null", timeout=5)
     is_connected = "Connected" in status_out
@@ -238,6 +279,7 @@ def get_warp_status():
         "colo": colo,
         "ip": ip,
         "docker_proxy": docker_proxy_enabled,
+        "docker_info": get_docker_info(),
         "git_proxy": git_proxy_enabled,
         "gitlab_proxy": gitlab_proxy_enabled,
         "raw_status": status_out or "WARP Service Offline"
@@ -896,6 +938,9 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     <button class="tab-btn" onclick="switchTab('routing')" id="tabBtn-routing">
       <span>🔀</span> <span>Điều hướng Proxy</span>
     </button>
+    <button class="tab-btn" onclick="switchTab('docker')" id="tabBtn-docker">
+      <span>🐳</span> <span>Docker & Build</span>
+    </button>
     <button class="tab-btn" onclick="switchTab('gitlab')" id="tabBtn-gitlab">
       <span>🦊</span> <span>GitLab CI/CD</span>
     </button>
@@ -946,15 +991,15 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
       <div class="card col-4 metric-card">
         <div>
           <div class="metric-header">
-            <span class="metric-title">🐳 Docker Proxy</span>
+            <span class="metric-title">🐳 Docker Proxy & Build</span>
             <span id="ovDockerBadge" class="badge-status inactive">○ Đang kiểm tra...</span>
           </div>
           <p style="font-size: 12px; color: var(--text-muted); margin: 0 0 14px 0; line-height: 1.5;">
-            Tự động kéo các container registry quốc tế qua WARP, giữ nguyên tốc độ kéo trực tiếp Docker Hub (~200 Mbps).
+            Cấu hình daemon proxy, reload daemon không gián đoạn, và chạy lệnh docker build trực tiếp trên UI.
           </p>
         </div>
-        <button onclick="switchTab('routing')" class="btn btn-secondary btn-sm" style="width: 100%;">
-          Cấu hình Docker ➔
+        <button onclick="switchTab('docker')" class="btn btn-primary btn-sm" style="width: 100%;">
+          Docker & Build Console ➔
         </button>
       </div>
 
@@ -1108,7 +1153,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         <div class="control-item">
           <div class="control-info">
             <h4>Proxy cho Docker Daemon (Kèm NO_PROXY Docker Hub)</h4>
-            <p>Tự động cấu hình daemon để kéo các registry quốc tế (ghcr.io, quay.io, gcr.io) qua WARP, giữ nguyên tốc độ kéo trực tiếp Docker Hub (~200 Mbps).</p>
+            <p>Tự động cấu hình daemon để kéo các registry quốc tế (ghcr.io, quay.io, gcr.io) qua WARP, giữ nguyên tốc độ kéo trực tiếp Docker Hub (~200 Mbps). <a href="javascript:void(0)" onclick="switchTab('docker')" style="color:var(--accent); text-decoration:none; font-weight:600;">Mở Tab Docker & Build Console ➔</a></p>
           </div>
           <label class="switch">
             <input type="checkbox" id="dockerSwitch" onchange="toggleDockerProxy()">
@@ -1162,6 +1207,174 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
           <button onclick="copyToClipboard('forward-socks5 .github.com 127.0.0.1:40000 .\nforward-socks5 .gitlab.com 127.0.0.1:40000 .')" class="btn btn-secondary btn-sm">Copy</button>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- TAB: DOCKER PROXY & BUILD CONSOLE -->
+  <div class="tab-pane" id="tab-docker">
+    <div class="dashboard-grid">
+
+      <!-- Daemon Proxy Configuration Card (col-12) -->
+      <div class="card col-12">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; flex-wrap: wrap; gap: 12px;">
+          <div>
+            <h3 style="font-size: 17px; font-weight: 700; margin: 0 0 6px 0;">🐳 Quản Lý Proxy Docker Daemon & Systemd Reload</h3>
+            <p style="font-size: 13px; color: var(--text-muted); margin: 0;">
+              Cấu hình dịch vụ Docker Daemon đi qua Cloudflare WARP SOCKS5 để kéo base images từ GitHub Packages, Quay.io, GCR, Docker Hub không bị timeout.
+            </p>
+          </div>
+          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <button onclick="fetchDockerStatus(true)" class="btn btn-secondary btn-sm" title="Làm mới trạng thái Docker">
+              🔄 Làm Mới
+            </button>
+            <button onclick="reloadDockerProxy(true)" class="btn btn-primary btn-sm" id="btnApplyDockerProxy">
+              ⚡ Áp Dụng & Reload Daemon
+            </button>
+            <button onclick="reloadDockerProxy(false)" class="btn btn-danger btn-sm" id="btnDisableDockerProxy">
+              🛑 Tắt Proxy Docker
+            </button>
+          </div>
+        </div>
+
+        <!-- Docker Daemon Status Indicators -->
+        <div class="stats-row" style="grid-template-columns: repeat(4, 1fr); margin-bottom: 18px;">
+          <div class="stat-box">
+            <div class="stat-label">Trạng thái Daemon</div>
+            <div id="dockerDaemonStatus" class="stat-value" style="color: var(--success); font-size: 14px;">Đang kiểm tra...</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">Phiên bản Docker</div>
+            <div id="dockerVersionValue" class="stat-value" style="font-size: 14px;">--</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">HTTP/HTTPS Proxy Daemon</div>
+            <div id="dockerProxyValue" class="stat-value" style="font-size: 12px; color: var(--accent);">--</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">File Cấu hình Systemd</div>
+            <div id="dockerConfStatus" class="stat-value" style="font-size: 12px;">--</div>
+          </div>
+        </div>
+
+        <!-- NO_PROXY Configuration & Presets -->
+        <div style="background: rgba(0, 0, 0, 0.25); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 12px; padding: 16px; margin-bottom: 16px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 8px;">
+            <label style="font-size: 13px; font-weight: 600; color: var(--text);">
+              Danh sách NO_PROXY (Không định tuyến qua WARP):
+            </label>
+            <div class="quick-chips" style="margin-top: 0;">
+              <span style="font-size: 11px; color: var(--text-muted); align-self: center; margin-right: 4px;">Preset:</span>
+              <button type="button" class="chip-btn" onclick="setDockerNoProxyPreset('default')">Khuyên dùng (Docker Hub + Mạng nội bộ)</button>
+              <button type="button" class="chip-btn" onclick="setDockerNoProxyPreset('minimal')">Tất cả qua WARP</button>
+              <button type="button" class="chip-btn" onclick="setDockerNoProxyPreset('cluster')">Kubernetes / Mạng nội bộ</button>
+            </div>
+          </div>
+          <textarea id="dockerNoProxyInput" class="input-style" rows="2" style="font-family: 'JetBrains Mono', monospace; font-size: 12px; resize: vertical;" placeholder="localhost,127.0.0.1,docker.io,*.docker.io,*.docker.com,production.cloudflare.docker.com,103.186.100.0/23,192.168.200.0/24"></textarea>
+          <div style="font-size: 11px; color: var(--text-muted); margin-top: 6px;">
+            💡 <strong>Mẹo:</strong> Docker Hub tải trực tiếp tại máy chủ trong nước thường đạt tốc độ rất cao (~200 Mbps). Khuyến nghị giữ <code>docker.io,*.docker.io</code> trong NO_PROXY để kéo Docker Hub trực tiếp, các registry quốc tế khác tự động đi qua WARP.
+          </div>
+        </div>
+
+        <!-- Raw Config preview -->
+        <div class="code-snippet" style="margin-top: 8px;">
+          <code id="dockerRawConfView" style="font-size: 11px;"># Chưa nạp thông tin cấu hình systemd</code>
+          <button onclick="copyToClipboard(document.getElementById('dockerRawConfView').innerText)" class="btn btn-secondary btn-sm">Copy Systemd Conf</button>
+        </div>
+      </div>
+
+      <!-- Docker Build Direct Execution Card (col-12) -->
+      <div class="card col-12">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; flex-wrap: wrap; gap: 12px;">
+          <div>
+            <h3 style="font-size: 17px; font-weight: 700; margin: 0 0 6px 0;">🚀 Trình Thực Thi Lệnh Docker Build Trực Tiếp Trên Web UI</h3>
+            <p style="font-size: 13px; color: var(--text-muted); margin: 0;">
+              Thử nghiệm và thực thi lệnh <code>docker build</code> với tham số Proxy WARP (<code>--network host</code>, <code>--build-arg HTTP_PROXY=socks5://127.0.0.1:40000</code>) ngay trên giao diện web.
+            </p>
+          </div>
+          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <button onclick="runDockerBuild()" class="btn btn-primary" id="btnRunDockerBuild">
+              <span id="buildSpinner" style="display: none;">⏳</span> <span>🚀 Bắt Đầu Build</span>
+            </button>
+            <button onclick="cleanupDockerImage()" class="btn btn-danger btn-sm" id="btnCleanupDockerImage" title="Xóa image vừa build để giải phóng dung lượng đĩa">
+              🗑️ Dọn Image
+            </button>
+            <button onclick="clearDockerConsole()" class="btn btn-secondary btn-sm">
+              🧹 Xóa Console
+            </button>
+          </div>
+        </div>
+
+        <!-- Presets and Build Config Row -->
+        <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 14px; margin-bottom: 14px;">
+          <div>
+            <label style="font-size: 12px; font-weight: 600; color: var(--text-muted); display: block; margin-bottom: 6px;">
+              Mẫu Dockerfile có sẵn (Nhấp để chọn mẫu thử nghiệm nhanh):
+            </label>
+            <div class="quick-chips" style="margin-top: 0;">
+              <button type="button" class="chip-btn" onclick="loadDockerfileTemplate('alpine')">🏔️ Alpine + cURL</button>
+              <button type="button" class="chip-btn" onclick="loadDockerfileTemplate('python')">🐍 Python + Pip Packages</button>
+              <button type="button" class="chip-btn" onclick="loadDockerfileTemplate('node')">🟩 Node.js + NPM Express</button>
+              <button type="button" class="chip-btn" onclick="loadDockerfileTemplate('git')">🐙 Git Clone Repo Test</button>
+              <button type="button" class="chip-btn" onclick="loadDockerfileTemplate('custom')">✏️ Tùy chỉnh trống</button>
+            </div>
+          </div>
+          <div>
+            <label style="font-size: 12px; font-weight: 600; color: var(--text-muted); display: block; margin-bottom: 6px;">
+              Tag Name Image:
+            </label>
+            <input type="text" id="dockerBuildTag" class="input-style" value="warp-build-test:latest" style="font-family: 'JetBrains Mono', monospace; font-size: 12px;" />
+          </div>
+        </div>
+
+        <!-- Build Options Checkboxes -->
+        <div style="display: flex; gap: 18px; flex-wrap: wrap; margin-bottom: 14px; background: rgba(255, 255, 255, 0.02); padding: 10px 14px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.05);">
+          <label style="font-size: 12px; display: flex; align-items: center; gap: 6px; cursor: pointer;">
+            <input type="checkbox" id="chkInjectProxy" checked>
+            <span>Inject <code>--build-arg HTTP_PROXY=socks5://127.0.0.1:40000</code></span>
+          </label>
+          <label style="font-size: 12px; display: flex; align-items: center; gap: 6px; cursor: pointer;">
+            <input type="checkbox" id="chkNetworkHost" checked>
+            <span>Sử dụng <code>--network host</code> (Bắt buộc để kết nối SOCKS5 Host)</span>
+          </label>
+          <label style="font-size: 12px; display: flex; align-items: center; gap: 6px; cursor: pointer;">
+            <input type="checkbox" id="chkNoCache" checked>
+            <span>Sử dụng <code>--no-cache</code> (Kiểm tra tốc độ tải thực tế)</span>
+          </label>
+          <label style="font-size: 12px; display: flex; align-items: center; gap: 6px; cursor: pointer;">
+            <input type="checkbox" id="chkAutoCleanup">
+            <span>Tự động dọn dẹp image sau khi build</span>
+          </label>
+        </div>
+
+        <!-- Dockerfile Editor Area -->
+        <div style="margin-bottom: 14px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+            <label style="font-size: 12px; font-weight: 600; color: var(--text-muted);">
+              Nội dung Dockerfile:
+            </label>
+            <span style="font-size: 11px; color: var(--text-muted);">Hỗ trợ đầy đủ lệnh BuildKit</span>
+          </div>
+          <textarea id="dockerfileEditor" class="input-style" rows="7" style="font-family: 'JetBrains Mono', monospace; font-size: 12px; line-height: 1.5; tab-size: 2; resize: vertical;" spellcheck="false"></textarea>
+        </div>
+
+        <!-- Live Terminal Console Log -->
+        <div>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <div style="font-size: 12px; font-weight: 600; color: var(--text-muted); display: flex; align-items: center; gap: 8px;">
+              <span>📺 Live Terminal Console Output:</span>
+              <span id="buildStatusBadge" class="badge-status inactive">○ Chờ lệnh build</span>
+            </div>
+            <div id="buildMetrics" style="font-size: 11px; color: var(--text-muted); font-family: 'JetBrains Mono', monospace;">
+              --
+            </div>
+          </div>
+          <div id="dockerBuildConsole" class="terminal-box" style="min-height: 220px; max-height: 380px;">
+[Sẵn sàng] Hãy chọn một mẫu Dockerfile hoặc soạn thảo nội dung của bạn ở trên, sau đó nhấn "🚀 Bắt Đầu Build".
+          </div>
+        </div>
+
+      </div>
+
     </div>
   </div>
 
@@ -1267,6 +1480,9 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     if (tabId === 'logs') {
       loadLogs();
     }
+    if (tabId === 'docker') {
+      fetchDockerStatus();
+    }
   }
 
   function selectAndRunSpeed(region) {
@@ -1332,6 +1548,11 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     document.getElementById('gitSwitch').checked = data.git_proxy;
     document.getElementById('gitlabSwitch').checked = data.gitlab_proxy;
 
+    // Cập nhật Docker UI nếu có thông tin docker_info
+    if (data.docker_info) {
+      updateDockerUI(data.docker_info);
+    }
+
     // Cập nhật badges trên Overview
     const ovDocker = document.getElementById('ovDockerBadge');
     if (ovDocker) {
@@ -1365,20 +1586,276 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     }
   }
 
-  async function toggleDockerProxy() {
-    const enable = document.getElementById('dockerSwitch').checked;
-    showToast(enable ? 'Đang bật Proxy cho Docker Daemon...' : 'Đang gỡ Proxy cho Docker Daemon...');
+  function updateDockerUI(info) {
+    if (!info) return;
+    const daemonEl = document.getElementById('dockerDaemonStatus');
+    const verEl = document.getElementById('dockerVersionValue');
+    const proxyEl = document.getElementById('dockerProxyValue');
+    const confEl = document.getElementById('dockerConfStatus');
+    const noProxyInput = document.getElementById('dockerNoProxyInput');
+    const rawConfView = document.getElementById('dockerRawConfView');
+
+    if (daemonEl) {
+      if (info.running) {
+        daemonEl.innerText = '● Đang Hoạt Động';
+        daemonEl.style.color = 'var(--success)';
+      } else if (info.installed) {
+        daemonEl.innerText = '○ Đã Dừng';
+        daemonEl.style.color = 'var(--danger)';
+      } else {
+        daemonEl.innerText = '✕ Chưa Cài Đặt';
+        daemonEl.style.color = 'var(--text-muted)';
+      }
+    }
+    if (verEl) verEl.innerText = info.version || (info.installed ? 'Đang chạy' : 'Không có');
+    if (proxyEl) {
+      if (info.http_proxy) {
+        proxyEl.innerText = info.http_proxy;
+        proxyEl.style.color = 'var(--accent)';
+      } else {
+        proxyEl.innerText = 'Không có (Trực tiếp)';
+        proxyEl.style.color = 'var(--text-muted)';
+      }
+    }
+    if (confEl) {
+      confEl.innerText = info.conf_exists ? '● Đã Cài Đặt' : '○ Chưa Tạo';
+      confEl.style.color = info.conf_exists ? 'var(--success)' : 'var(--text-muted)';
+    }
+    if (noProxyInput && !noProxyInput.dataset.userEdited && info.no_proxy) {
+      noProxyInput.value = info.no_proxy;
+    }
+    if (rawConfView) {
+      rawConfView.innerText = info.raw_conf || '# Chưa có file cấu hình /etc/systemd/system/docker.service.d/http-proxy.conf';
+    }
+  }
+
+  async function fetchDockerStatus(showNotification = false) {
+    if (showNotification) showToast('Đang kiểm tra trạng thái Docker daemon...');
     try {
-      await fetch('/api/toggle-docker', {
+      const res = await fetch('/api/docker/status');
+      const data = await res.json();
+      if (data.success && data.info) {
+        updateDockerUI(data.info);
+        if (showNotification) showToast('Đã làm mới thông tin Docker thành công!');
+      }
+    } catch (e) {
+      if (showNotification) showToast('Lỗi lấy thông tin Docker: ' + e);
+    }
+  }
+
+  async function reloadDockerProxy(enable = true) {
+    const btn = enable ? document.getElementById('btnApplyDockerProxy') : document.getElementById('btnDisableDockerProxy');
+    const origText = btn ? btn.innerText : '';
+    if (btn) {
+      btn.disabled = true;
+      btn.innerText = enable ? 'Đang reload daemon...' : 'Đang tắt proxy...';
+    }
+    showToast(enable ? 'Đang cấu hình & reload Docker daemon...' : 'Đang tắt proxy Docker & restart daemon...');
+
+    const noProxyInput = document.getElementById('dockerNoProxyInput');
+    const noProxyVal = noProxyInput ? noProxyInput.value : '';
+
+    try {
+      const res = await fetch('/api/docker/reload', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enable })
+        body: JSON.stringify({ enable, no_proxy: noProxyVal })
       });
-      showToast('Cập nhật cấu hình Docker Daemon thành công!');
-      setTimeout(fetchStatus, 1500);
+      const data = await res.json();
+      if (data.success) {
+        showToast(enable ? 'Reload Docker daemon thành công! Proxy đã hoạt động.' : 'Đã tắt proxy Docker daemon và khôi phục mặc định!');
+        if (data.info) updateDockerUI(data.info);
+        const switchEl = document.getElementById('dockerSwitch');
+        if (switchEl) switchEl.checked = enable;
+        setTimeout(fetchStatus, 1000);
+      } else {
+        showToast('Lỗi: ' + (data.error || 'Không thể reload Docker'));
+      }
     } catch (e) {
-      showToast('Lỗi cập nhật Docker: ' + e);
+      showToast('Lỗi kết nối máy chủ: ' + e);
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerText = origText;
+      }
     }
+  }
+
+  function toggleDockerProxy() {
+    const enable = document.getElementById('dockerSwitch').checked;
+    reloadDockerProxy(enable);
+  }
+
+  function setDockerNoProxyPreset(preset) {
+    const input = document.getElementById('dockerNoProxyInput');
+    if (!input) return;
+    input.dataset.userEdited = 'true';
+    if (preset === 'default') {
+      input.value = 'localhost,127.0.0.1,docker.io,*.docker.io,*.docker.com,production.cloudflare.docker.com,103.186.100.0/23,192.168.200.0/24';
+      showToast('Đã chọn Preset Khuyên dùng (Docker Hub kéo trực tiếp, Registry quốc tế qua WARP)');
+    } else if (preset === 'minimal') {
+      input.value = 'localhost,127.0.0.1';
+      showToast('Đã chọn Preset Toàn bộ qua WARP');
+    } else if (preset === 'cluster') {
+      input.value = 'localhost,127.0.0.1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,*.local,*.cluster.local';
+      showToast('Đã chọn Preset Kubernetes / Internal LAN');
+    }
+  }
+
+  const DOCKER_TEMPLATES = {
+    alpine: `FROM alpine:latest
+# 1. Kiểm tra tải package apk qua Cloudflare WARP SOCKS5
+RUN apk update && apk add --no-cache curl ca-certificates
+# 2. Kiểm tra IP Egress Anycast của Cloudflare
+RUN curl -s --connect-timeout 8 https://cloudflare.com/cdn-cgi/trace
+CMD ["sh", "-c", "echo 'Container chạy thành công!'"]`,
+
+    python: `FROM python:3.11-alpine
+# Kiểm tra cài đặt Pip packages quốc tế qua WARP
+RUN pip install --no-cache-dir requests urllib3
+RUN python -c "import requests; print('>>> [WARP-OK] Python requests hoạt động tốt! Egress IP:', requests.get('https://cloudflare.com/cdn-cgi/trace').text.splitlines()[2])"
+CMD ["python", "-c", "print('Python Container Ready')"]`,
+
+    node: `FROM node:20-alpine
+WORKDIR /app
+# Kiểm tra tải npm packages qua WARP Proxy
+RUN npm init -y && npm install --no-audit axios
+RUN node -e "const axios = require('axios'); axios.get('https://cloudflare.com/cdn-cgi/trace').then(r => console.log('>>> [WARP-OK] Axios trace:\\n' + r.data.split('\\n').slice(0,3).join('\\n')));"
+CMD ["node", "-v"]`,
+
+    git: `FROM alpine:latest
+RUN apk update && apk add --no-cache git ca-certificates
+# Thử nghiệm clone repository quốc tế qua WARP Proxy
+RUN git clone --depth 1 https://github.com/Datahub-DC/cloudflare-warp-app.git /tmp/repo
+RUN ls -la /tmp/repo
+CMD ["ls", "-la", "/tmp/repo"]`,
+
+    custom: `FROM alpine:latest
+# Soạn thảo các chỉ thị build của bạn tại đây
+RUN echo "Hello from Cloudflare WARP Docker Build!"
+`
+  };
+
+  function loadDockerfileTemplate(tpl) {
+    const editor = document.getElementById('dockerfileEditor');
+    if (editor && DOCKER_TEMPLATES[tpl]) {
+      editor.value = DOCKER_TEMPLATES[tpl];
+      showToast(`Đã tải mẫu Dockerfile: ${tpl.toUpperCase()}`);
+    }
+  }
+
+  async function runDockerBuild() {
+    const editor = document.getElementById('dockerfileEditor');
+    const tagInput = document.getElementById('dockerBuildTag');
+    const chkProxy = document.getElementById('chkInjectProxy');
+    const chkNet = document.getElementById('chkNetworkHost');
+    const chkCache = document.getElementById('chkNoCache');
+    const chkCleanup = document.getElementById('chkAutoCleanup');
+    const consoleBox = document.getElementById('dockerBuildConsole');
+    const badge = document.getElementById('buildStatusBadge');
+    const metrics = document.getElementById('buildMetrics');
+    const btn = document.getElementById('btnRunDockerBuild');
+    const spinner = document.getElementById('buildSpinner');
+
+    const dockerfile = editor.value.trim();
+    const tag = tagInput.value.trim() || 'warp-build-test:latest';
+
+    if (!dockerfile) {
+      showToast('Vui lòng nhập nội dung Dockerfile!');
+      return;
+    }
+
+    btn.disabled = true;
+    if (spinner) spinner.style.display = 'inline';
+    badge.className = 'badge-status active';
+    badge.style.color = '';
+    badge.style.background = '';
+    badge.innerText = '⏳ Đang Build...';
+    metrics.innerText = `Tag: ${tag} | Bắt đầu...`;
+
+    const warpPort = (currentStatus && currentStatus.port) ? currentStatus.port : 40000;
+    consoleBox.innerText = `[Bắt đầu] docker build ${chkNet.checked ? '--network host ' : ''}${chkCache.checked ? '--no-cache ' : ''}-t ${tag} ...\n` +
+      `[Thông số] Inject Proxy: ${chkProxy.checked ? 'BẬT (socks5://127.0.0.1:' + warpPort + ')' : 'TẮT'}\n` +
+      `[Lưu ý] Tiến trình có thể mất từ 5-30 giây tùy theo kích thước base image...\n------------------------------------------------------------\n`;
+
+    showToast(`Đang thực hiện docker build image ${tag}...`);
+
+    try {
+      const res = await fetch('/api/docker/build', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          dockerfile: dockerfile,
+          tag: tag,
+          network_host: chkNet.checked,
+          inject_proxy: chkProxy.checked,
+          no_cache: chkCache.checked,
+          cleanup: chkCleanup.checked
+        })
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        badge.className = 'badge-status active';
+        badge.innerText = `✓ Hoàn tất (0)`;
+        metrics.innerText = `Thời gian: ${data.duration}s | Exit: 0`;
+        consoleBox.innerText += (data.output || 'Build thành công không có output.') + `\n\n[✓ THÀNH CÔNG] Build hoàn tất trong ${data.duration} giây!`;
+        showToast(`Docker build ${tag} thành công trong ${data.duration}s!`);
+      } else {
+        badge.className = 'badge-status inactive';
+        badge.style.color = '#ef4444';
+        badge.style.background = 'rgba(239, 68, 68, 0.15)';
+        badge.innerText = `✕ Thất bại (${data.exit_code})`;
+        metrics.innerText = `Thời gian: ${data.duration || '--'}s | Lỗi`;
+        consoleBox.innerText += (data.output || data.error || 'Đã có lỗi xảy ra trong quá trình build.');
+        showToast('Docker build thất bại! Kiểm tra console log.');
+      }
+    } catch (e) {
+      badge.className = 'badge-status inactive';
+      badge.style.color = '#ef4444';
+      badge.innerText = '✕ Lỗi kết nối';
+      consoleBox.innerText += `\n[Lỗi kết nối]: ${e}`;
+      showToast('Lỗi khi gọi API build: ' + e);
+    } finally {
+      btn.disabled = false;
+      if (spinner) spinner.style.display = 'none';
+      consoleBox.scrollTop = consoleBox.scrollHeight;
+    }
+  }
+
+  async function cleanupDockerImage() {
+    const tag = document.getElementById('dockerBuildTag').value.trim() || 'warp-build-test:latest';
+    showToast(`Đang xóa image ${tag}...`);
+    try {
+      const res = await fetch('/api/docker/cleanup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tag })
+      });
+      const data = await res.json();
+      const consoleBox = document.getElementById('dockerBuildConsole');
+      if (data.success) {
+        showToast(`Đã xóa image ${tag} thành công!`);
+        consoleBox.innerText += `\n[Dọn dẹp]: Đã xóa image ${tag}\n${data.output || ''}`;
+      } else {
+        showToast(`Không thể xóa image: ${data.error || 'Lỗi'}`);
+        consoleBox.innerText += `\n[Lỗi dọn dẹp]: ${data.error || ''}`;
+      }
+      consoleBox.scrollTop = consoleBox.scrollHeight;
+    } catch (e) {
+      showToast('Lỗi khi dọn image: ' + e);
+    }
+  }
+
+  function clearDockerConsole() {
+    const consoleBox = document.getElementById('dockerBuildConsole');
+    consoleBox.innerText = '[Sẵn sàng] Console đã được xóa. Nhấn "🚀 Bắt Đầu Build" để chạy lệnh mới.';
+    const badge = document.getElementById('buildStatusBadge');
+    badge.className = 'badge-status inactive';
+    badge.innerText = '○ Chờ lệnh build';
+    badge.style.color = '';
+    badge.style.background = '';
+    document.getElementById('buildMetrics').innerText = '--';
   }
 
   async function toggleGitProxy() {
@@ -1621,13 +2098,23 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
   // Khôi phục tab từ URL hash nếu có
   function initTabFromHash() {
     const hash = window.location.hash.replace('#', '');
-    if (['overview', 'speedtest', 'routing', 'gitlab', 'logs'].includes(hash)) {
+    if (['overview', 'speedtest', 'routing', 'docker', 'gitlab', 'logs'].includes(hash)) {
       switchTab(hash);
     }
   }
-  window.addEventListener('DOMContentLoaded', initTabFromHash);
+  window.addEventListener('DOMContentLoaded', () => {
+    initTabFromHash();
+    loadDockerfileTemplate('alpine');
+    const noProxyInput = document.getElementById('dockerNoProxyInput');
+    if (noProxyInput) {
+      noProxyInput.addEventListener('input', () => {
+        noProxyInput.dataset.userEdited = 'true';
+      });
+    }
+  });
   window.addEventListener('hashchange', initTabFromHash);
   initTabFromHash();
+  loadDockerfileTemplate('alpine');
 </script>
 
 <!-- Modal Đổi Mật Khẩu -->
@@ -1676,14 +2163,17 @@ class WarpAPIHandler(http.server.BaseHTTPRequestHandler):
         return self.client_address[0]
 
     def send_json(self, data, code=200):
-        self.send_response(code)
-        self.send_header("Content-Type", "application/json; charset=utf-8")
-        self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
-        self.send_header("X-Content-Type-Options", "nosniff")
-        self.send_header("X-Frame-Options", "DENY")
-        self.send_header("Referrer-Policy", "strict-origin-when-cross-origin")
-        self.end_headers()
-        self.wfile.write(json.dumps(data).encode("utf-8"))
+        try:
+            self.send_response(code)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("X-Frame-Options", "DENY")
+            self.send_header("Referrer-Policy", "strict-origin-when-cross-origin")
+            self.end_headers()
+            self.wfile.write(json.dumps(data).encode("utf-8"))
+        except (BrokenPipeError, ConnectionResetError):
+            pass
 
     def send_redirect(self, location):
         self.send_response(302)
@@ -1863,19 +2353,28 @@ class WarpAPIHandler(http.server.BaseHTTPRequestHandler):
             self.send_json({"success": True, "port": port})
             return
 
-        if path == "/api/toggle-docker":
+        # API Quản lý Docker Daemon & Proxy
+        if path == "/api/docker/status":
+            self.send_json({"success": True, "info": get_docker_info()})
+            return
+
+        if path == "/api/docker/reload" or path == "/api/toggle-docker":
             enable = req_data.get("enable", True)
-            conf_dir = "/etc/systemd/system/docker.service.d"
-            conf_path = f"{conf_dir}/http-proxy.conf"
+            no_proxy = req_data.get("no_proxy", "").strip()
+            if not no_proxy:
+                no_proxy = "localhost,127.0.0.1,docker.io,*.docker.io,*.docker.com,production.cloudflare.docker.com,103.186.100.0/23,192.168.200.0/24"
+            
             status = get_warp_status()
             port = status.get("port", 40000)
+            conf_dir = "/etc/systemd/system/docker.service.d"
+            conf_path = f"{conf_dir}/http-proxy.conf"
 
             if enable:
                 os.makedirs(conf_dir, exist_ok=True)
                 content = f"""[Service]
 Environment="HTTP_PROXY=socks5://127.0.0.1:{port}"
 Environment="HTTPS_PROXY=socks5://127.0.0.1:{port}"
-Environment="NO_PROXY=localhost,127.0.0.1,docker.io,*.docker.io,*.docker.com,production.cloudflare.docker.com,103.186.100.0/23"
+Environment="NO_PROXY={no_proxy}"
 """
                 with open(conf_path, "w") as f:
                     f.write(content)
@@ -1883,8 +2382,83 @@ Environment="NO_PROXY=localhost,127.0.0.1,docker.io,*.docker.io,*.docker.com,pro
                 if os.path.exists(conf_path):
                     os.remove(conf_path)
 
-            run_cmd("systemctl daemon-reload && systemctl restart docker")
-            self.send_json({"success": True, "docker_proxy": enable})
+            run_cmd("systemctl daemon-reload && systemctl restart docker", timeout=30)
+            time.sleep(1)
+            info = get_docker_info()
+            self.send_json({"success": True, "docker_proxy": enable, "info": info})
+            return
+
+        # API Thực hiện lệnh Docker Build
+        if path == "/api/docker/build":
+            dockerfile = req_data.get("dockerfile", "").strip()
+            tag = req_data.get("tag", "warp-build-test:latest").strip()
+            network_host = req_data.get("network_host", True)
+            inject_proxy = req_data.get("inject_proxy", True)
+            no_cache = req_data.get("no_cache", True)
+            cleanup = req_data.get("cleanup", False)
+
+            if not dockerfile:
+                self.send_json({"success": False, "error": "Nội dung Dockerfile không được để trống!"}, code=400)
+                return
+
+            status = get_warp_status()
+            port = status.get("port", 40000)
+
+            t0 = time.time()
+            try:
+                with tempfile.TemporaryDirectory() as tmpdir:
+                    df_path = os.path.join(tmpdir, "Dockerfile")
+                    with open(df_path, "w") as f:
+                        f.write(dockerfile)
+
+                    cmd = ["docker", "build"]
+                    if network_host:
+                        cmd += ["--network", "host"]
+                    if no_cache:
+                        cmd += ["--no-cache"]
+                    if inject_proxy:
+                        cmd += [
+                            "--build-arg", f"HTTP_PROXY=socks5://127.0.0.1:{port}",
+                            "--build-arg", f"HTTPS_PROXY=socks5://127.0.0.1:{port}",
+                            "--build-arg", f"ALL_PROXY=socks5://127.0.0.1:{port}"
+                        ]
+                    cmd += ["-t", tag, tmpdir]
+
+                    p = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=180)
+                    dur = round(time.time() - t0, 2)
+                    output_text = p.stdout
+
+                    if cleanup and p.returncode == 0:
+                        subprocess.run(["docker", "rmi", "-f", tag], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                        output_text += f"\n\n[Đã tự động dọn dẹp image: {tag}]"
+
+                    self.send_json({
+                        "success": (p.returncode == 0),
+                        "exit_code": p.returncode,
+                        "duration": dur,
+                        "output": output_text
+                    })
+                    return
+            except subprocess.TimeoutExpired:
+                dur = round(time.time() - t0, 2)
+                self.send_json({
+                    "success": False,
+                    "exit_code": -1,
+                    "duration": dur,
+                    "output": "Lệnh docker build bị timeout sau 180 giây!"
+                }, code=408)
+                return
+            except Exception as e:
+                self.send_json({"success": False, "error": str(e)}, code=500)
+                return
+
+        if path == "/api/docker/cleanup":
+            tag = req_data.get("tag", "").strip()
+            if not tag:
+                self.send_json({"success": False, "error": "Thiếu tag image!"}, code=400)
+                return
+            _, out, _ = run_cmd(f"docker rmi -f {tag}")
+            self.send_json({"success": True, "output": out})
             return
 
         if path == "/api/toggle-git":
@@ -1961,8 +2535,11 @@ def main():
     print(f"  Auth Config  : {AUTH_FILE}")
     print("=" * 64)
 
-    socketserver.TCPServer.allow_reuse_address = True
-    with socketserver.TCPServer((HOST, PORT), WarpAPIHandler) as httpd:
+    class ThreadedTCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
+        daemon_threads = True
+        allow_reuse_address = True
+
+    with ThreadedTCPServer((HOST, PORT), WarpAPIHandler) as httpd:
         try:
             httpd.serve_forever()
         except KeyboardInterrupt:
