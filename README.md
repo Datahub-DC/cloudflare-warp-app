@@ -1,0 +1,111 @@
+# Linux Cloudflare WARP Installer (SOCKS5 Proxy Mode)
+
+Công cụ tự động hóa cài đặt và cấu hình **Cloudflare WARP** cho máy chủ Linux (Data Center / VPS) hoàn toàn miễn phí, an toàn tuyệt đối cho kết nối SSH, tương thích toàn diện với các phiên bản Ubuntu.
+
+---
+
+## 🚀 Hỗ trợ các phiên bản hệ điều hành
+* **Ubuntu 20.04 LTS (Focal Fossa)**
+* **Ubuntu 22.04 LTS (Jammy Jellyfish)**
+* **Ubuntu 24.04 LTS (Noble Numbat)**
+* **Ubuntu 26.04 LTS (Resolute)**
+
+---
+
+## ⚠️ Tính năng an toàn cốt lõi (Safe by Default)
+
+> [!CAUTION]
+> **KHÔNG BAO GIỜ BỊ MẤT KẾT NỐI SSH:**  
+> Mặc định chế độ Full Tunnel (VPN Card mạng ảo) của WARP sẽ ghi đè Default Gateway và làm ngắt kết nối SSH vào IP Public của máy chủ ngay lập tức.  
+> Script này **bắt buộc chạy ở chế độ SOCKS5 Proxy (`127.0.0.1:40000`)**, tuyệt đối không can thiệp vào bảng định tuyến (Routing Table) của hệ điều hành. Toàn bộ lưu lượng SSH, Web Server, DB hiện có vẫn hoạt động 100% bình thường.
+
+---
+
+## 🛠️ Cài đặt nhanh trong 1 dòng lệnh
+
+### Cách 1: Clone repo và chạy cài đặt
+```bash
+git clone https://github.com/<your-org>/linux-cloudflare-warp.git
+cd linux-cloudflare-warp
+sudo bash install.sh
+```
+
+### Cách 2: Chạy trực tiếp qua cURL / Bash
+```bash
+curl -fsSL https://raw.githubusercontent.com/<your-org>/linux-cloudflare-warp/main/install.sh | sudo bash
+```
+
+---
+
+## ⚡ Các tính năng tự động của Script
+
+1. **Tự động nhận diện bản phân phối:** Tự động phát hiện Codename (`focal`, `jammy`, `noble`, `resolute`) để chọn đúng kho APT Cloudflare chính thức.
+2. **Khắc phục tường lửa Data Center (Chặn Port 80 Outbound):** Tự động phát hiện nếu cổng 80 ra ngoài bị chặn và tự động chuyển đổi kho lưu trữ APT sang **HTTPS** (`https://archive.ubuntu.com/`).
+3. **Cài đặt & Kích hoạt:** Tự động thêm GPG key, repository và cài đặt `cloudflare-warp`.
+4. **Cấu hình SOCKS5 Proxy:** Thiết lập cổng `127.0.0.1:40000`, kích hoạt kết nối và chạy kiểm tra định tuyến tự động (`warp=on`).
+
+---
+
+## 📖 Hướng dẫn sử dụng sau khi cài đặt
+
+### 1. Tăng tốc Git CLI (Chỉ cho GitHub/GitLab quốc tế)
+```bash
+# Chỉ riêng GitHub đi qua WARP SOCKS5:
+git config --global http."https://github.com/".proxy "socks5://127.0.0.1:40000"
+
+# Chỉ riêng GitLab đi qua WARP SOCKS5:
+git config --global http."https://gitlab.com/".proxy "socks5://127.0.0.1:40000"
+
+# Khi nào muốn tắt:
+git config --global --unset http."https://github.com/".proxy
+```
+
+### 2. Sử dụng với cURL
+```bash
+curl --socks5-hostname 127.0.0.1:40000 -O https://example.com/file.tar.gz
+```
+
+### 3. Dùng biến môi trường tạm thời cho phiên Terminal / CI-CD
+```bash
+export all_proxy="socks5://127.0.0.1:40000"
+export ALL_PROXY="socks5://127.0.0.1:40000"
+
+# Tắt proxy:
+unset all_proxy ALL_PROXY
+```
+
+### 4. Cấu hình cho Docker Daemon (Khuyên dùng NO_PROXY)
+> [!TIP]
+> Docker Hub kéo trực tiếp qua mạng nội địa thường rất nhanh (~200 Mbps). Nếu cần proxy cho các registry quốc tế khác, cấu hình danh sách `NO_PROXY` để bỏ qua Docker Hub:
+
+Tạo file `/etc/systemd/system/docker.service.d/http-proxy.conf`:
+```ini
+[Service]
+Environment="HTTP_PROXY=socks5://127.0.0.1:40000"
+Environment="HTTPS_PROXY=socks5://127.0.0.1:40000"
+Environment="NO_PROXY=localhost,127.0.0.1,docker.io,*.docker.io,*.docker.com,production.cloudflare.docker.com"
+```
+Khởi động lại Docker:
+```bash
+sudo systemctl daemon-reload && sudo systemctl restart docker
+```
+
+---
+
+## 📌 Các lệnh quản lý tiện ích
+
+```bash
+# Kiểm tra trạng thái kết nối
+sudo bash install.sh --status
+
+# Gỡ bỏ cài đặt hoàn toàn khỏi hệ thống
+sudo bash install.sh --uninstall
+
+# Xem trợ giúp
+sudo bash install.sh --help
+```
+
+---
+
+## 📄 Tài liệu chi tiết
+Chi tiết về số liệu đo kiểm thực tế (Hetzner Đức vs Docker Hub), nguyên lý định tuyến và cấu hình Privoxy nâng cao: xem tại [CF_Warp_guideline.md](file:///root/linux-cloudflare-warp/CF_Warp_guideline.md).
