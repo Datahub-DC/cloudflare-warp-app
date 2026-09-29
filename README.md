@@ -25,14 +25,14 @@ Công cụ tự động hóa cài đặt và cấu hình **Cloudflare WARP** cho
 
 ### Cách 1: Clone repo và chạy cài đặt
 ```bash
-git clone https://github.com/<your-org>/linux-cloudflare-warp.git
-cd linux-cloudflare-warp
+git clone https://github.com/Datahub-DC/cloudflare-warp-app.git
+cd cloudflare-warp-app
 sudo bash install.sh
 ```
 
 ### Cách 2: Chạy trực tiếp qua cURL / Bash
 ```bash
-curl -fsSL https://raw.githubusercontent.com/<your-org>/linux-cloudflare-warp/main/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/Datahub-DC/cloudflare-warp-app/main/install.sh | sudo bash
 ```
 
 ---
