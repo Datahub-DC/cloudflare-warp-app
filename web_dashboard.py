@@ -18,6 +18,7 @@ import json
 import os
 import re
 import secrets
+import shutil
 import socketserver
 import subprocess
 import sys
@@ -233,6 +234,75 @@ def get_docker_info():
             "raw_conf": raw_conf,
             "error": str(e)
         }
+
+def scan_dockerfiles(base_path="/root", max_depth=3):
+    if not base_path or not os.path.exists(base_path):
+        base_path = "/root"
+    base_path = os.path.abspath(base_path)
+    
+    ignore_dirs = {
+        ".git", "node_modules", "venv", ".venv", "__pycache__",
+        ".cache", "tmp", ".gemini", "proc", "sys", "dev"
+    }
+
+    found = []
+    base_depth = base_path.rstrip(os.path.sep).count(os.path.sep)
+
+    try:
+        for root, dirs, files in os.walk(base_path, topdown=True, followlinks=False):
+            cur_depth = root.count(os.path.sep) - base_depth
+            if cur_depth >= max_depth:
+                dirs.clear()
+                continue
+            
+            dirs[:] = [d for d in dirs if d not in ignore_dirs and not d.startswith(".")]
+
+            for f in sorted(files):
+                f_lower = f.lower()
+                if f_lower == "dockerfile" or f_lower.startswith("dockerfile.") or f_lower.endswith(".dockerfile"):
+                    full_p = os.path.join(root, f)
+                    try:
+                        st = os.stat(full_p)
+                        if st.st_size > 2 * 1024 * 1024:
+                            continue
+                        rel_p = os.path.relpath(full_p, base_path)
+                        dir_name = os.path.basename(root) or os.path.basename(base_path)
+                        found.append({
+                            "name": f,
+                            "rel_path": rel_p,
+                            "full_path": full_p,
+                            "dir_path": root,
+                            "dir_name": dir_name,
+                            "size_bytes": st.st_size,
+                            "mtime": int(st.st_mtime)
+                        })
+                    except Exception:
+                        pass
+    except Exception:
+        pass
+
+    found.sort(key=lambda x: (x["rel_path"].count(os.path.sep), x["rel_path"]))
+    return found
+
+def read_dockerfile_content(file_path):
+    if not file_path or not os.path.isfile(file_path):
+        return {"success": False, "error": f"Tệp không tồn tại: {file_path}"}
+    try:
+        st = os.stat(file_path)
+        if st.st_size > 2 * 1024 * 1024:
+            return {"success": False, "error": "Tệp quá lớn (> 2MB) để hiển thị"}
+        with open(file_path, "r", encoding="utf-8", errors="replace") as f:
+            content = f.read()
+        return {
+            "success": True,
+            "content": content,
+            "file_path": os.path.abspath(file_path),
+            "dir_path": os.path.dirname(os.path.abspath(file_path)),
+            "file_name": os.path.basename(file_path),
+            "dir_name": os.path.basename(os.path.dirname(os.path.abspath(file_path)))
+        }
+    except Exception as e:
+        return {"success": False, "error": f"Không thể đọc tệp: {str(e)}"}
 
 RESIDENTIAL_PROXY_FILE = os.environ.get("RESIDENTIAL_PROXY_FILE", "/root/linux-cloudflare-warp/.residential_proxy.json")
 
@@ -1538,6 +1608,57 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
           </div>
         </div>
 
+        <!-- Directory / Project Dockerfile Discovery Section -->
+        <div style="background: rgba(0, 0, 0, 0.35); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 14px 16px; margin-bottom: 16px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 16px;">📂</span>
+              <strong style="font-size: 13px; color: #fff;">Quét & Chọn Thư Mục Dự Án Chứa Dockerfile</strong>
+              <span id="scanCountBadge" class="badge-status inactive" style="font-size: 11px;">Chưa quét</span>
+            </div>
+            <div class="quick-chips" style="margin-top: 0;">
+              <span style="font-size: 11px; color: var(--text-muted); align-self: center;">Đường dẫn mẫu:</span>
+              <button type="button" class="chip-btn" onclick="setScanPath('/root')">📁 /root</button>
+              <button type="button" class="chip-btn" onclick="setScanPath('/home')">📁 /home</button>
+              <button type="button" class="chip-btn" onclick="setScanPath('/var/www')">📁 /var/www</button>
+              <button type="button" class="chip-btn" onclick="setScanPath('/root/linux-cloudflare-warp')">📁 Thư mục hiện tại</button>
+            </div>
+          </div>
+
+          <!-- Scan Path Input & Scan Button -->
+          <div style="display: grid; grid-template-columns: 1fr auto; gap: 10px; margin-bottom: 10px;">
+            <input type="text" id="dockerScanPath" class="input-style" value="/root" placeholder="Nhập đường dẫn thư mục cần quét trên server (VD: /root hoặc /home/user)" style="font-family: 'JetBrains Mono', monospace; font-size: 12px;" />
+            <button type="button" onclick="scanDockerDirectory()" class="btn btn-secondary btn-sm" id="btnScanDockerDir" style="white-space: nowrap; height: 38px;">
+              <span id="scanSpinner" style="display: none;">⏳</span> <span>🔍 Quét Thư Mục</span>
+            </button>
+          </div>
+
+          <!-- Discovered Dockerfiles Dropdown & Action Buttons -->
+          <div style="display: grid; grid-template-columns: 1fr auto auto; gap: 10px; align-items: center;">
+            <select id="discoveredDockerfilesSelect" class="select-style" onchange="onDiscoveredDockerfileChange()" style="font-family: 'JetBrains Mono', monospace; font-size: 12px; height: 38px;">
+              <option value="">-- Danh sách Dockerfile tìm thấy trên server (Nhấn '🔍 Quét Thư Mục') --</option>
+            </select>
+            <button type="button" onclick="loadSelectedDiscoveredDockerfile()" class="btn btn-primary btn-sm" id="btnLoadSelectedDf" style="white-space: nowrap; height: 38px;" title="Tải nội dung Dockerfile vào trình soạn thảo và đặt thư mục làm Context">
+              📂 Nạp Vào Editor & Context
+            </button>
+            <button type="button" onclick="clearBuildContext()" class="btn btn-secondary btn-sm" style="white-space: nowrap; height: 38px;" title="Hủy chọn thư mục context, chuyển về chế độ build độc lập">
+              ✕ Bỏ Chọn Context
+            </button>
+          </div>
+
+          <!-- Active Build Context Banner -->
+          <div id="buildContextBanner" style="margin-top: 10px; padding: 10px 14px; background: rgba(0, 210, 255, 0.08); border: 1px solid rgba(0, 210, 255, 0.2); border-radius: 8px; font-size: 12px; display: none; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+              <span style="color: var(--accent); font-weight: 700;">🏗️ Thư mục Build Context:</span>
+              <code id="activeContextDirText" style="color: #fff; font-weight: 700; background: rgba(0,0,0,0.4); padding: 2px 8px; border-radius: 4px;">--</code>
+              <span id="activeDockerfileFileText" style="color: var(--text-muted); font-size: 11px;">(File: --)</span>
+            </div>
+            <span style="font-size: 11px; color: #6ee7b7; background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.25); padding: 3px 10px; border-radius: 6px; font-weight: 600;">
+              ✓ Các lệnh COPY / ADD cục bộ sẽ lấy từ thư mục này
+            </span>
+          </div>
+        </div>
+
         <!-- Presets and Build Config Row -->
         <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 14px; margin-bottom: 14px;">
           <div>
@@ -1919,6 +2040,9 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     }
     if (tabId === 'docker') {
       fetchDockerStatus();
+      if (discoveredDockerfiles.length === 0) {
+        scanDockerDirectory();
+      }
     }
     if (tabId === 'residential') {
       loadResidentialProxy();
@@ -2185,8 +2309,147 @@ RUN echo "Hello from Cloudflare WARP Docker Build!"
     const editor = document.getElementById('dockerfileEditor');
     if (editor && DOCKER_TEMPLATES[tpl]) {
       editor.value = DOCKER_TEMPLATES[tpl];
-      showToast(`Đã tải mẫu Dockerfile: ${tpl.toUpperCase()}`);
+      clearBuildContext();
+      showToast(`Đã tải mẫu Dockerfile: ${tpl.toUpperCase()} (Chế độ độc lập)`);
     }
+  }
+
+  // --- DOCKER DIRECTORY SCAN & CONTEXT SELECTION ---
+  let discoveredDockerfiles = [];
+  let selectedBuildContextDir = null;
+  let selectedDockerfileFile = null;
+
+  function setScanPath(path) {
+    const input = document.getElementById('dockerScanPath');
+    if (input) {
+      input.value = path;
+      scanDockerDirectory();
+    }
+  }
+
+  async function scanDockerDirectory() {
+    const pathInput = document.getElementById('dockerScanPath');
+    const scanPath = (pathInput ? pathInput.value.trim() : '') || '/root';
+    const btn = document.getElementById('btnScanDockerDir');
+    const spinner = document.getElementById('scanSpinner');
+    const select = document.getElementById('discoveredDockerfilesSelect');
+    const badge = document.getElementById('scanCountBadge');
+
+    if (btn) btn.disabled = true;
+    if (spinner) spinner.style.display = 'inline';
+    showToast(`Đang quét thư mục '${scanPath}' tìm Dockerfile...`);
+
+    try {
+      const res = await fetch('/api/docker/scan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: scanPath, max_depth: 4 })
+      });
+      const data = await res.json();
+      if (data.success) {
+        discoveredDockerfiles = data.dockerfiles || [];
+        if (select) {
+          select.innerHTML = '';
+          const defaultOpt = document.createElement('option');
+          defaultOpt.value = '';
+          defaultOpt.innerText = `-- Chọn Dockerfile đã tìm thấy (${discoveredDockerfiles.length} tệp) --`;
+          select.appendChild(defaultOpt);
+
+          discoveredDockerfiles.forEach(item => {
+            const opt = document.createElement('option');
+            opt.value = item.full_path;
+            const sizeKb = Math.round(item.size_bytes / 1024 * 10) / 10;
+            opt.innerText = `📦 [${item.dir_name}] ${item.name} (${sizeKb} KB) - ${item.rel_path}`;
+            select.appendChild(opt);
+          });
+        }
+
+        if (badge) {
+          badge.className = discoveredDockerfiles.length > 0 ? 'badge-status active' : 'badge-status inactive';
+          badge.innerText = discoveredDockerfiles.length > 0 ? `● Tìm thấy ${discoveredDockerfiles.length} Dockerfile` : '○ Không tìm thấy';
+        }
+
+        if (discoveredDockerfiles.length > 0) {
+          showToast(`Tìm thấy ${discoveredDockerfiles.length} Dockerfile trong '${data.base_path}'!`);
+          if (select && !selectedBuildContextDir) {
+            select.selectedIndex = 1;
+            loadSelectedDiscoveredDockerfile();
+          }
+        } else {
+          showToast(`Không tìm thấy Dockerfile nào trong '${data.base_path}'. Hãy thử thư mục khác!`);
+        }
+      } else {
+        showToast('✕ Lỗi quét: ' + (data.error || 'Thao tác thất bại'));
+      }
+    } catch (e) {
+      showToast('Lỗi kết nối khi quét thư mục: ' + e);
+    } finally {
+      if (btn) btn.disabled = false;
+      if (spinner) spinner.style.display = 'none';
+    }
+  }
+
+  function onDiscoveredDockerfileChange() {
+    const select = document.getElementById('discoveredDockerfilesSelect');
+    if (select && select.value) {
+      loadSelectedDiscoveredDockerfile();
+    }
+  }
+
+  async function loadSelectedDiscoveredDockerfile() {
+    const select = document.getElementById('discoveredDockerfilesSelect');
+    if (!select || !select.value) {
+      showToast('Vui lòng chọn một Dockerfile từ danh sách tìm thấy!');
+      return;
+    }
+    const filePath = select.value;
+    const btn = document.getElementById('btnLoadSelectedDf');
+    if (btn) btn.disabled = true;
+    showToast('Đang đọc nội dung Dockerfile...');
+
+    try {
+      const res = await fetch('/api/docker/read-file', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ file_path: filePath })
+      });
+      const data = await res.json();
+      if (data.success && data.content !== undefined) {
+        document.getElementById('dockerfileEditor').value = data.content;
+        selectedBuildContextDir = data.dir_path;
+        selectedDockerfileFile = data.file_name;
+
+        const banner = document.getElementById('buildContextBanner');
+        const ctxText = document.getElementById('activeContextDirText');
+        const fileText = document.getElementById('activeDockerfileFileText');
+        if (ctxText) ctxText.innerText = data.dir_path;
+        if (fileText) fileText.innerText = `(File: ${data.file_name})`;
+        if (banner) banner.style.display = 'flex';
+
+        const tagInput = document.getElementById('dockerBuildTag');
+        if (tagInput && data.dir_name) {
+          tagInput.value = `${data.dir_name}:latest`;
+        }
+
+        showToast(`✓ Đã nạp Dockerfile từ dự án [${data.dir_name}]! Context: ${data.dir_path}`);
+      } else {
+        showToast('✕ Lỗi: ' + (data.error || 'Không thể đọc tệp Dockerfile'));
+      }
+    } catch (e) {
+      showToast('Lỗi khi nạp Dockerfile: ' + e);
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  }
+
+  function clearBuildContext() {
+    selectedBuildContextDir = null;
+    selectedDockerfileFile = null;
+    const banner = document.getElementById('buildContextBanner');
+    if (banner) banner.style.display = 'none';
+    const select = document.getElementById('discoveredDockerfilesSelect');
+    if (select) select.value = '';
+    showToast('Đã bỏ chọn Context. Chế độ build độc lập trong thư mục tạm.');
   }
 
   async function runDockerBuild() {
@@ -2222,8 +2485,10 @@ RUN echo "Hello from Cloudflare WARP Docker Build!"
     const proxySourceEl = document.getElementById('dockerBuildProxySource');
     const proxySource = proxySourceEl ? proxySourceEl.value : 'warp';
     const proxySrcText = proxySource === 'residential' ? 'Proxy Dân Cư' : `Cloudflare WARP (socks5://127.0.0.1:${warpPort})`;
+    const contextText = selectedBuildContextDir ? `${selectedBuildContextDir} (Dự án thực tế)` : 'Tạm thời (Chế độ độc lập)';
 
     consoleBox.innerText = `[Bắt đầu] docker build ${chkNet.checked ? '--network host ' : ''}${chkCache.checked ? '--no-cache ' : ''}-t ${tag} ...\n` +
+      `[Thông số] Thư mục Context: ${contextText}\n` +
       `[Thông số] Nguồn Proxy: ${proxySrcText} | Inject Proxy: ${chkProxy.checked ? 'BẬT' : 'TẮT'}\n` +
       `[Lưu ý] Tiến trình có thể mất từ 5-30 giây tùy theo kích thước base image...\n------------------------------------------------------------\n`;
 
@@ -2236,6 +2501,7 @@ RUN echo "Hello from Cloudflare WARP Docker Build!"
         body: JSON.stringify({
           dockerfile: dockerfile,
           tag: tag,
+          context_dir: selectedBuildContextDir || '',
           proxy_source: proxySource,
           network_host: chkNet.checked,
           inject_proxy: chkProxy.checked,
@@ -3069,6 +3335,28 @@ class WarpAPIHandler(http.server.BaseHTTPRequestHandler):
             self.send_json({"success": True, "info": get_docker_info()})
             return
 
+        if path == "/api/docker/scan":
+            scan_path = req_data.get("path", "/root").strip()
+            max_depth = int(req_data.get("max_depth", 3))
+            max_depth = max(1, min(max_depth, 6))
+            results = scan_dockerfiles(scan_path, max_depth=max_depth)
+            self.send_json({
+                "success": True,
+                "base_path": scan_path,
+                "count": len(results),
+                "dockerfiles": results
+            })
+            return
+
+        if path == "/api/docker/read-file":
+            file_path = req_data.get("file_path", "").strip()
+            res = read_dockerfile_content(file_path)
+            if res.get("success"):
+                self.send_json(res)
+            else:
+                self.send_json(res, code=400)
+            return
+
         if path == "/api/docker/reload" or path == "/api/toggle-docker":
             enable = req_data.get("enable", True)
             no_proxy = req_data.get("no_proxy", "").strip()
@@ -3103,6 +3391,7 @@ Environment="NO_PROXY={no_proxy}"
         if path == "/api/docker/build":
             dockerfile = req_data.get("dockerfile", "").strip()
             tag = req_data.get("tag", "warp-build-test:latest").strip()
+            context_dir = req_data.get("context_dir", "").strip()
             network_host = req_data.get("network_host", True)
             inject_proxy = req_data.get("inject_proxy", True)
             no_cache = req_data.get("no_cache", True)
@@ -3112,11 +3401,15 @@ Environment="NO_PROXY={no_proxy}"
                 self.send_json({"success": False, "error": "Nội dung Dockerfile không được để trống!"}, code=400)
                 return
 
+            if context_dir and not os.path.isdir(context_dir):
+                self.send_json({"success": False, "error": f"Thư mục build context không tồn tại: {context_dir}"}, code=400)
+                return
+
             status = get_warp_status()
             port = status.get("port", 40000)
             proxy_source = req_data.get("proxy_source", "warp")
             build_proxy_url = f"socks5://127.0.0.1:{port}"
-            build_no_proxy = "localhost,127.0.0.1,docker.io,*.docker.io,*.docker.com,production.cloudflare.docker.com,103.186.100.0/23,192.168.200.0/24"
+            build_no_proxy = "localhost,127.0.0.1,docker.io,*.docker.io,*.docker.com,production.cloudflare.docker.com,deb.debian.org,*.debian.org,archive.ubuntu.com,security.ubuntu.com,103.186.100.0/23,192.168.200.0/24"
 
             if proxy_source == "residential":
                 res_cfg = load_residential_proxy()
@@ -3127,57 +3420,66 @@ Environment="NO_PROXY={no_proxy}"
                         build_no_proxy = res_cfg.get("no_proxy")
 
             t0 = time.time()
+            tmp_df_dir = None
             try:
-                with tempfile.TemporaryDirectory() as tmpdir:
-                    df_path = os.path.join(tmpdir, "Dockerfile")
-                    with open(df_path, "w") as f:
-                        f.write(dockerfile)
+                cmd = ["docker", "build"]
+                if network_host:
+                    cmd += ["--network", "host"]
+                if no_cache:
+                    cmd += ["--no-cache"]
+                if inject_proxy:
+                    cmd += [
+                        "--build-arg", f"HTTP_PROXY={build_proxy_url}",
+                        "--build-arg", f"HTTPS_PROXY={build_proxy_url}",
+                        "--build-arg", f"ALL_PROXY={build_proxy_url}",
+                        "--build-arg", f"http_proxy={build_proxy_url}",
+                        "--build-arg", f"https_proxy={build_proxy_url}",
+                        "--build-arg", f"all_proxy={build_proxy_url}",
+                        "--build-arg", f"NO_PROXY={build_no_proxy}",
+                        "--build-arg", f"no_proxy={build_no_proxy}"
+                    ]
 
-                    cmd = ["docker", "build"]
-                    if network_host:
-                        cmd += ["--network", "host"]
-                    if no_cache:
-                        cmd += ["--no-cache"]
-                    if inject_proxy:
-                        cmd += [
-                            "--build-arg", f"HTTP_PROXY={build_proxy_url}",
-                            "--build-arg", f"HTTPS_PROXY={build_proxy_url}",
-                            "--build-arg", f"ALL_PROXY={build_proxy_url}",
-                            "--build-arg", f"http_proxy={build_proxy_url}",
-                            "--build-arg", f"https_proxy={build_proxy_url}",
-                            "--build-arg", f"all_proxy={build_proxy_url}",
-                            "--build-arg", f"NO_PROXY={build_no_proxy}",
-                            "--build-arg", f"no_proxy={build_no_proxy}"
-                        ]
-                    cmd += ["-t", tag, tmpdir]
+                tmp_df_dir = tempfile.mkdtemp(prefix="warp_build_")
+                df_path = os.path.join(tmp_df_dir, "Dockerfile")
+                with open(df_path, "w", encoding="utf-8") as f:
+                    f.write(dockerfile)
 
-                    p = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=180)
-                    dur = round(time.time() - t0, 2)
-                    output_text = p.stdout
+                if context_dir and os.path.isdir(context_dir):
+                    cmd += ["-t", tag, "-f", df_path, context_dir]
+                else:
+                    cmd += ["-t", tag, tmp_df_dir]
 
-                    if cleanup and p.returncode == 0:
-                        subprocess.run(["docker", "rmi", "-f", tag], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                        output_text += f"\n\n[Đã tự động dọn dẹp image: {tag}]"
+                p = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=300)
+                dur = round(time.time() - t0, 2)
+                output_text = p.stdout
 
-                    self.send_json({
-                        "success": (p.returncode == 0),
-                        "exit_code": p.returncode,
-                        "duration": dur,
-                        "output": output_text
-                    })
-                    return
+                if cleanup and p.returncode == 0:
+                    subprocess.run(["docker", "rmi", "-f", tag], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    output_text += f"\n\n[Đã tự động dọn dẹp image: {tag}]"
+
+                self.send_json({
+                    "success": (p.returncode == 0),
+                    "exit_code": p.returncode,
+                    "duration": dur,
+                    "output": output_text,
+                    "context_dir": context_dir or "scratch"
+                })
+                return
             except subprocess.TimeoutExpired:
                 dur = round(time.time() - t0, 2)
                 self.send_json({
                     "success": False,
                     "exit_code": -1,
                     "duration": dur,
-                    "output": "Lệnh docker build bị timeout sau 180 giây!"
+                    "output": "Lệnh docker build bị timeout sau 300 giây!"
                 }, code=408)
                 return
             except Exception as e:
                 self.send_json({"success": False, "error": str(e)}, code=500)
                 return
+            finally:
+                if tmp_df_dir and os.path.exists(tmp_df_dir):
+                    shutil.rmtree(tmp_df_dir, ignore_errors=True)
 
         if path == "/api/docker/cleanup":
             tag = req_data.get("tag", "").strip()

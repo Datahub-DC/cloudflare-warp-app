@@ -139,10 +139,15 @@ sudo bash install.sh --dashboard-service
      - Tùy chỉnh danh sách `NO_PROXY` trực tiếp với các Preset 1-click: *Khuyên dùng (Docker Hub + Mạng nội bộ)*, *Toàn bộ qua WARP*, *Kubernetes / Internal LAN*.
      - Nút **⚡ Áp Dụng & Reload Daemon** (`systemctl daemon-reload && systemctl restart docker`) tự động nạp cấu hình mới mà không làm đứt kết nối máy chủ.
      - Nút **🛑 Tắt Proxy Docker** để khôi phục mặc định.
+   * **Quét Thư Mục & Chọn Dự Án Dockerfile (Project Directory Scanner & Context):**
+     - Quét tự động cây thư mục máy chủ (`/root`, `/home`, `/var/www`,...) để tìm mọi `Dockerfile`, `Dockerfile.*`, `*.dockerfile`.
+     - Tải (Load) nội dung Dockerfile vào Web Editor để kiểm tra và tinh chỉnh trực tiếp trên giao diện web.
+     - Tự động gán thư mục dự án làm **Docker Build Context** (`docker build -f <file> <context_dir>`), hỗ trợ đầy đủ các lệnh `COPY . /app` hoặc `COPY requirements.txt .` của dự án thực tế.
+     - Nút **Hủy Context** để linh hoạt chuyển đổi giữa dự án thực tế và chế độ thử nghiệm độc lập.
    * **Trình Thực Thi Lệnh Docker Build Trực Tiếp:**
      - Tích hợp sẵn các mẫu Dockerfile phổ biến: 🏔️ *Alpine + cURL*, 🐍 *Python + Pip Packages*, 🟩 *Node.js + NPM Express*, 🐙 *Git Clone Repo*, ✏️ *Custom Dockerfile*.
      - Chọn nguồn proxy build: **Cloudflare WARP** hoặc **Proxy Dân Cư (Residential)**.
-     - Tùy chỉnh Tag Name Image (VD: `warp-build-test:latest`).
+     - Tùy chỉnh Tag Name Image (VD: `warp-build-test:latest` hoặc tự động đặt theo tên thư mục dự án).
      - Tùy chọn build nâng cao: Tự động inject `--build-arg HTTP_PROXY=...`, `--network host`, `--no-cache`, và tự động dọn dẹp image.
      - Hộp hiển thị Live Terminal Console với BuildKit logs chi tiết, mã thoát (Exit Code), thời gian đo kiểm thực tế (giây).
      - Nút **🗑️ Dọn Image** để giải phóng dung lượng đĩa và nút **🧹 Xóa Console**.
@@ -189,14 +194,15 @@ sudo bash install.sh --menu
   [2] Tạm ngắt kết nối WARP (Disconnect)
   [3] Đổi cổng SOCKS5 Proxy (Change Port)
   [4] Bật / Tắt Proxy cho Docker Daemon (kèm NO_PROXY)
-  [5] Bật / Tắt Proxy cho GitHub CLI (github.com)
-  [6] Bật / Tắt Proxy cho GitLab CLI (gitlab.com)
-  [7] 🏡 Cấu hình & Quản lý Proxy Dân Cư (Residential Proxy)
-  [8] 🦊 Xem cấu hình tăng tốc GitLab CI/CD & Runner
-  [9] ⚡ Đo kiểm tốc độ mạng quốc tế (Speed Test)
-  [10] 🌐 Mở Web Dashboard trên trình duyệt (Port 8888)
-  [11] 🔐 Đổi mật khẩu Web Dashboard
-  [12] 📋 Xem log dịch vụ (warp-svc logs)
+  [5] 🚀 Quét thư mục & Build Dockerfile qua Proxy
+  [6] Bật / Tắt Proxy cho GitHub CLI (github.com)
+  [7] Bật / Tắt Proxy cho GitLab CLI (gitlab.com)
+  [8] 🏡 Cấu hình & Quản lý Proxy Dân Cư (Residential Proxy)
+  [9] 🦊 Xem cấu hình tăng tốc GitLab CI/CD & Runner
+  [10] ⚡ Đo kiểm tốc độ mạng quốc tế (Speed Test)
+  [11] 🌐 Mở Web Dashboard trên trình duyệt (Port 8888)
+  [12] 🔐 Đổi mật khẩu Web Dashboard
+  [13] 📋 Xem log dịch vụ (warp-svc logs)
   [0] Thoát
 ```
 

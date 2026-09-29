@@ -607,6 +607,217 @@ print('OK')
     done
 }
 
+docker_build_menu() {
+    local script_dir
+    script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+    local port
+    port=$(get_current_port)
+
+    while true; do
+        clear_screen
+        echo -e "${CYAN}╔══════════════════════════════════════════════════════════════════════╗${NC}"
+        echo -e "${CYAN}║${NC}   ${BOLD}${YELLOW}QUÉT THƯ MỤC DỰ ÁN & THỰC THI DOCKER BUILD QUA PROXY${NC}               ${CYAN}║${NC}"
+        echo -e "${CYAN}╚══════════════════════════════════════════════════════════════════════╝${NC}"
+        echo -e "  Proxy khả dụng: WARP (127.0.0.1:${port}) hoặc Proxy Dân Cư"
+        echo -e "${CYAN}──────────────────────────────────────────────────────────────────────${NC}"
+        echo -e "  ${BOLD}[1]${NC} 🔍 Quét thư mục tìm Dockerfile & Chọn build (Scan Projects)"
+        echo -e "  ${BOLD}[2]${NC} ✍️  Nhập trực tiếp đường dẫn thư mục dự án để build"
+        echo -e "  ${BOLD}[3]${NC} 🏔️  Build thử nghiệm mẫu Alpine + cURL (Test Proxy)"
+        echo -e "  ${BOLD}[4]${NC} 🐍 Build thử nghiệm mẫu Python + Pip Requests"
+        echo -e "  ${BOLD}[0]${NC} Quay lại Menu chính"
+        echo -e "${CYAN}──────────────────────────────────────────────────────────────────────${NC}"
+        read -rp "Chọn thao tác [0-4]: " db_choice
+
+        case "$db_choice" in
+            1)
+                echo ""
+                read -rp "Nhập đường dẫn gốc để quét [mặc định /root]: " scan_root
+                scan_root=${scan_root:-/root}
+                if [ ! -d "$scan_root" ]; then
+                    echo -e "${RED}[LỖI] Thư mục không tồn tại: $scan_root${NC}"
+                    pause
+                    continue
+                fi
+
+                echo -e "${YELLOW}Đang quét thư mục '$scan_root' tìm Dockerfile...${NC}"
+                local found_json
+                found_json=$(python3 -c "
+import sys, json
+sys.path.insert(0, '${script_dir}')
+from web_dashboard import scan_dockerfiles
+res = scan_dockerfiles('$scan_root', max_depth=4)
+print(json.dumps(res))
+" 2>/dev/null)
+
+                local count
+                count=$(echo "$found_json" | python3 -c "import sys, json; data=json.load(sys.stdin); print(len(data))" 2>/dev/null)
+                count=${count:-0}
+
+                if [ "$count" -eq 0 ]; then
+                    echo -e "${RED}Không tìm thấy file Dockerfile nào trong: $scan_root${NC}"
+                    pause
+                    continue
+                fi
+
+                echo -e "${GREEN}Tìm thấy ${count} file Dockerfile:${NC}"
+                echo ""
+                python3 -c "
+import sys, json
+data = json.loads('''$found_json''')
+for i, item in enumerate(data):
+    size_kb = round(item['size_bytes'] / 1024, 1)
+    print(f\"  \033[1m[{i+1}]\033[0m \033[36m[{item['dir_name']}]\033[0m {item['name']} ({size_kb} KB) ➜ \033[33m{item['full_path']}\033[0m\")
+"
+                echo ""
+                read -rp "Chọn số thứ tự Dockerfile cần build [1-$count, 0 để hủy]: " sel_idx
+                if [[ ! "$sel_idx" =~ ^[0-9]+$ ]] || [ "$sel_idx" -lt 1 ] || [ "$sel_idx" -gt "$count" ]; then
+                    echo -e "${YELLOW}Đã hủy chọn.${NC}"
+                    pause
+                    continue
+                fi
+
+                local selected_dir selected_file
+                selected_dir=$(python3 -c "import sys, json; data=json.loads('''$found_json'''); print(data[int($sel_idx)-1]['dir_path'])")
+                selected_file=$(python3 -c "import sys, json; data=json.loads('''$found_json'''); print(data[int($sel_idx)-1]['full_path'])")
+                local default_tag
+                default_tag=$(basename "$selected_dir"):latest
+
+                echo ""
+                echo -e "  ➜ File Dockerfile : ${CYAN}${selected_file}${NC}"
+                echo -e "  ➜ Thư mục Context : ${YELLOW}${selected_dir}${NC}"
+                read -rp "Nhập Tag Name Image [mặc định ${default_tag}]: " user_tag
+                user_tag=${user_tag:-$default_tag}
+
+                echo ""
+                echo -e "Chọn nguồn Proxy để build:"
+                echo -e "  [1] ⚡ Cloudflare WARP (127.0.0.1:${port})"
+                echo -e "  [2] 🏡 Proxy Dân Cư (Residential Proxy nếu đã cấu hình)"
+                echo -e "  [3] 🟢 Không dùng Proxy (Direct)"
+                read -rp "Chọn [1-3, mặc định 1]: " proxy_opt
+                proxy_opt=${proxy_opt:-1}
+
+                local build_proxy_url=""
+                if [ "$proxy_opt" -eq 1 ]; then
+                    build_proxy_url="socks5://127.0.0.1:${port}"
+                elif [ "$proxy_opt" -eq 2 ]; then
+                    build_proxy_url=$(python3 -c "
+import sys
+sys.path.insert(0, '${script_dir}')
+from web_dashboard import load_residential_proxy, get_proxy_url
+cfg = load_residential_proxy()
+print(get_proxy_url(cfg, hide_password=False))
+" 2>/dev/null)
+                    if [ -z "$build_proxy_url" ]; then
+                        echo -e "${YELLOW}Chưa cấu hình Proxy Dân Cư, sử dụng WARP thay thế.${NC}"
+                        build_proxy_url="socks5://127.0.0.1:${port}"
+                    fi
+                fi
+
+                echo ""
+                echo -e "${BLUE}==>${NC} ${BOLD}Bắt đầu thực thi lệnh docker build...${NC}"
+                local build_cmd=("docker" "build" "--network" "host")
+                if [ -n "$build_proxy_url" ]; then
+                    local no_proxy_def="localhost,127.0.0.1,docker.io,*.docker.io,*.docker.com,production.cloudflare.docker.com,deb.debian.org,*.debian.org,archive.ubuntu.com,security.ubuntu.com,103.186.100.0/23,192.168.200.0/24"
+                    build_cmd+=(
+                        "--build-arg" "HTTP_PROXY=${build_proxy_url}"
+                        "--build-arg" "HTTPS_PROXY=${build_proxy_url}"
+                        "--build-arg" "ALL_PROXY=${build_proxy_url}"
+                        "--build-arg" "http_proxy=${build_proxy_url}"
+                        "--build-arg" "https_proxy=${build_proxy_url}"
+                        "--build-arg" "all_proxy=${build_proxy_url}"
+                        "--build-arg" "NO_PROXY=${no_proxy_def}"
+                        "--build-arg" "no_proxy=${no_proxy_def}"
+                    )
+                fi
+                build_cmd+=("-t" "$user_tag" "-f" "$selected_file" "$selected_dir")
+
+                echo -e "Lệnh: ${CYAN}${build_cmd[*]}${NC}"
+                echo "------------------------------------------------------------"
+                "${build_cmd[@]}"
+                local ret=$?
+                echo "------------------------------------------------------------"
+                if [ $ret -eq 0 ]; then
+                    echo -e "${GREEN}✓ Docker build thành công image: ${BOLD}${user_tag}${NC}"
+                else
+                    echo -e "${RED}✕ Docker build thất bại (Mã lỗi: $ret)!${NC}"
+                fi
+                pause
+                ;;
+            2)
+                echo ""
+                read -rp "Nhập đường dẫn thư mục dự án: " direct_dir
+                if [ ! -d "$direct_dir" ]; then
+                    echo -e "${RED}[LỖI] Thư mục không tồn tại: $direct_dir${NC}"
+                    pause
+                    continue
+                fi
+                local df_target="${direct_dir}/Dockerfile"
+                if [ ! -f "$df_target" ]; then
+                    echo -e "${RED}[LỖI] Không tìm thấy Dockerfile trong: $direct_dir${NC}"
+                    pause
+                    continue
+                fi
+                local def_tag
+                def_tag=$(basename "$direct_dir"):latest
+                read -rp "Nhập Tag Name Image [mặc định ${def_tag}]: " dir_tag
+                dir_tag=${dir_tag:-$def_tag}
+
+                echo -e "${BLUE}==>${NC} Đang build qua WARP Proxy: ${CYAN}docker build --network host -t $dir_tag $direct_dir${NC}"
+                docker build --network host \
+                    --build-arg HTTP_PROXY="socks5://127.0.0.1:${port}" \
+                    --build-arg HTTPS_PROXY="socks5://127.0.0.1:${port}" \
+                    --build-arg ALL_PROXY="socks5://127.0.0.1:${port}" \
+                    --build-arg http_proxy="socks5://127.0.0.1:${port}" \
+                    --build-arg https_proxy="socks5://127.0.0.1:${port}" \
+                    --build-arg all_proxy="socks5://127.0.0.1:${port}" \
+                    --build-arg NO_PROXY="localhost,127.0.0.1,docker.io,*.docker.com,deb.debian.org,archive.ubuntu.com" \
+                    -t "$dir_tag" "$direct_dir"
+                local ret=$?
+                if [ $ret -eq 0 ]; then
+                    echo -e "${GREEN}✓ Build thành công image: $dir_tag${NC}"
+                else
+                    echo -e "${RED}✕ Build thất bại ($ret)!${NC}"
+                fi
+                pause
+                ;;
+            3)
+                echo ""
+                echo -e "${BLUE}==>${NC} Chạy thử nghiệm build Alpine + cURL qua WARP Proxy..."
+                docker build --network host --no-cache \
+                    --build-arg HTTP_PROXY="socks5://127.0.0.1:${port}" \
+                    --build-arg ALL_PROXY="socks5://127.0.0.1:${port}" \
+                    -t "warp-alpine-test:latest" - <<'EOF'
+FROM alpine:latest
+RUN apk update && apk add --no-cache curl
+RUN curl -s --connect-timeout 8 https://cloudflare.com/cdn-cgi/trace
+CMD ["echo", "Done"]
+EOF
+                pause
+                ;;
+            4)
+                echo ""
+                echo -e "${BLUE}==>${NC} Chạy thử nghiệm build Python + Pip qua WARP Proxy..."
+                docker build --network host --no-cache \
+                    --build-arg HTTP_PROXY="socks5://127.0.0.1:${port}" \
+                    --build-arg ALL_PROXY="socks5://127.0.0.1:${port}" \
+                    -t "warp-python-test:latest" - <<'EOF'
+FROM python:3.11-alpine
+RUN pip install --no-cache-dir requests
+RUN python -c "import requests; print('>>> Pip Requests OK! Egress IP:', requests.get('https://cloudflare.com/cdn-cgi/trace').text.splitlines()[2])"
+EOF
+                pause
+                ;;
+            0)
+                break
+                ;;
+            *)
+                echo -e "${RED}Lựa chọn không hợp lệ!${NC}"
+                sleep 1
+                ;;
+        esac
+    done
+}
+
 # Vòng lặp Menu chính
 while true; do
     header
@@ -614,17 +825,18 @@ while true; do
     echo -e "  ${BOLD}[2]${NC} ${RED}Tạm ngắt kết nối WARP${NC} (Disconnect)"
     echo -e "  ${BOLD}[3]${NC} ${YELLOW}Đổi cổng SOCKS5 Proxy${NC} (Change Port)"
     echo -e "  ${BOLD}[4]${NC} ${CYAN}Bật / Tắt Proxy cho Docker Daemon${NC} (kèm NO_PROXY)"
-    echo -e "  ${BOLD}[5]${NC} ${BLUE}Bật / Tắt Proxy cho GitHub CLI${NC} (github.com)"
-    echo -e "  ${BOLD}[6]${NC} ${MAGENTA}Bật / Tắt Proxy cho GitLab CLI${NC} (gitlab.com)"
-    echo -e "  ${BOLD}[7]${NC} 🏡 ${BOLD}${GREEN}Cấu hình & Quản lý Proxy Dân Cư${NC} (Residential Proxy)"
-    echo -e "  ${BOLD}[8]${NC} 🦊 ${BOLD}Xem cấu hình tăng tốc GitLab CI/CD & Runner${NC}"
-    echo -e "  ${BOLD}[9]${NC} ⚡ ${BOLD}Đo kiểm tốc độ mạng quốc tế${NC} (Speed Test)"
-    echo -e "  ${BOLD}[10]${NC} 🌐 ${CYAN}Mở Web Dashboard trên trình duyệt${NC} (Port 8888)"
-    echo -e "  ${BOLD}[11]${NC} 🔐 ${YELLOW}Đổi mật khẩu Web Dashboard${NC}"
-    echo -e "  ${BOLD}[12]${NC} 📋 Xem log dịch vụ (warp-svc logs)"
+    echo -e "  ${BOLD}[5]${NC} 🚀 ${BOLD}${GREEN}Quét thư mục & Build Dockerfile qua Proxy${NC}"
+    echo -e "  ${BOLD}[6]${NC} ${BLUE}Bật / Tắt Proxy cho GitHub CLI${NC} (github.com)"
+    echo -e "  ${BOLD}[7]${NC} ${MAGENTA}Bật / Tắt Proxy cho GitLab CLI${NC} (gitlab.com)"
+    echo -e "  ${BOLD}[8]${NC} 🏡 ${BOLD}${GREEN}Cấu hình & Quản lý Proxy Dân Cư${NC} (Residential Proxy)"
+    echo -e "  ${BOLD}[9]${NC} 🦊 ${BOLD}Xem cấu hình tăng tốc GitLab CI/CD & Runner${NC}"
+    echo -e "  ${BOLD}[10]${NC} ⚡ ${BOLD}Đo kiểm tốc độ mạng quốc tế${NC} (Speed Test)"
+    echo -e "  ${BOLD}[11]${NC} 🌐 ${CYAN}Mở Web Dashboard trên trình duyệt${NC} (Port 8888)"
+    echo -e "  ${BOLD}[12]${NC} 🔐 ${YELLOW}Đổi mật khẩu Web Dashboard${NC}"
+    echo -e "  ${BOLD}[13]${NC} 📋 Xem log dịch vụ (warp-svc logs)"
     echo -e "  ${BOLD}[0]${NC} Thoát"
     echo -e "${CYAN}──────────────────────────────────────────────────────────────────────${NC}"
-    read -rp "Chọn thao tác [0-12]: " choice
+    read -rp "Chọn thao tác [0-13]: " choice
 
     case "$choice" in
         1)
@@ -650,32 +862,35 @@ while true; do
             pause
             ;;
         5)
+            docker_build_menu
+            ;;
+        6)
             toggle_git
             pause
             ;;
-        6)
+        7)
             toggle_gitlab
             pause
             ;;
-        7)
+        8)
             residential_proxy_menu
             ;;
-        8)
+        9)
             show_gitlab_cicd_guide
             pause
             ;;
-        9)
+        10)
             speed_test_menu
             ;;
-        10)
+        11)
             start_web_dashboard
             pause
             ;;
-        11)
+        12)
             change_dashboard_password
             pause
             ;;
-        12)
+        13)
             journalctl -u warp-svc -n 30 --no-pager
             pause
             ;;
