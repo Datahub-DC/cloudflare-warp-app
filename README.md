@@ -146,7 +146,8 @@ sudo bash install.sh --dashboard-service
      - Nút **Hủy Context** để linh hoạt chuyển đổi giữa dự án thực tế và chế độ thử nghiệm độc lập.
    * **Trình Thực Thi Lệnh Docker Build Trực Tiếp:**
      - Tích hợp sẵn các mẫu Dockerfile phổ biến: 🏔️ *Alpine + cURL*, 🐍 *Python + Pip Packages*, 🟩 *Node.js + NPM Express*, 🐙 *Git Clone Repo*, ✏️ *Custom Dockerfile*.
-     - Chọn nguồn proxy build: **Cloudflare WARP** hoặc **Proxy Dân Cư (Residential)**.
+     - **Tích hợp HTTP Proxy Bridge (Privoxy :8118):** Tự động chuyển đổi SOCKS5 WARP thành HTTP Proxy chuẩn (`http://127.0.0.1:8118`), khắc phục triệt để lỗi `Missing dependencies for SOCKS support` của Python `pip` và lỗi không hỗ trợ SOCKS của Debian/Ubuntu `apt-get`.
+     - Chọn nguồn proxy build: **Cloudflare WARP (qua HTTP Bridge)** hoặc **Proxy Dân Cư (Residential)**.
      - Tùy chỉnh Tag Name Image (VD: `warp-build-test:latest` hoặc tự động đặt theo tên thư mục dự án).
      - Tùy chọn build nâng cao: Tự động inject `--build-arg HTTP_PROXY=...`, `--network host`, `--no-cache`, và tự động dọn dẹp image.
      - Hộp hiển thị Live Terminal Console với BuildKit logs chi tiết, mã thoát (Exit Code), thời gian đo kiểm thực tế (giây).

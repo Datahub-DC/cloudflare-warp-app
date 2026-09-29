@@ -19,6 +19,7 @@ import os
 import re
 import secrets
 import shutil
+import socket
 import socketserver
 import subprocess
 import sys
@@ -504,6 +505,41 @@ def restore_warp_proxy():
     save_residential_proxy(res_cfg)
     return True
 
+def is_port_open(host="127.0.0.1", port=8118, timeout=0.4):
+    """Kiểm tra cổng TCP có đang lắng nghe hay không"""
+    try:
+        with socket.create_connection((host, int(port)), timeout=timeout):
+            return True
+    except (socket.timeout, ConnectionRefusedError, OSError):
+        return False
+
+def ensure_privoxy(warp_port=40000):
+    """
+    Đảm bảo Privoxy HTTP Proxy Bridge (Port 8118) đang chạy và forward sang WARP SOCKS5 (Port warp_port).
+    Giải quyết triệt để lỗi 'Missing dependencies for SOCKS support' của pip và lỗi của apt-get.
+    """
+    if not shutil.which("privoxy"):
+        return False
+    cfg_path = "/etc/privoxy/config"
+    if not os.path.exists(cfg_path):
+        return False
+    try:
+        with open(cfg_path, "r", encoding="utf-8", errors="ignore") as f:
+            content = f.read()
+        target_rule = f"forward-socks5t / 127.0.0.1:{warp_port} ."
+        active_rules = [line.strip() for line in content.splitlines() if line.strip().startswith("forward-socks5")]
+        if not active_rules or active_rules[-1] != target_rule:
+            lines = [l for l in content.splitlines() if not l.strip().startswith("forward-socks5")]
+            lines.append(target_rule)
+            with open(cfg_path, "w", encoding="utf-8") as f:
+                f.write("\n".join(lines) + "\n")
+            run_cmd("systemctl restart privoxy", timeout=6)
+        elif not is_port_open("127.0.0.1", 8118):
+            run_cmd("systemctl restart privoxy", timeout=6)
+        return is_port_open("127.0.0.1", 8118)
+    except Exception:
+        return False
+
 def get_warp_status():
     _, status_out, _ = run_cmd("warp-cli --accept-tos status 2>/dev/null || warp-cli status 2>/dev/null", timeout=5)
     is_connected = "Connected" in status_out
@@ -542,6 +578,9 @@ def get_warp_status():
     _, gitlab_proxy_out, _ = run_cmd("git config --global http.\"https://gitlab.com/\".proxy")
     gitlab_proxy_enabled = bool(gitlab_proxy_out)
 
+    privoxy_installed = bool(shutil.which("privoxy"))
+    privoxy_active = is_port_open("127.0.0.1", 8118)
+
     res_cfg = load_residential_proxy()
 
     return {
@@ -554,6 +593,8 @@ def get_warp_status():
         "docker_info": get_docker_info(),
         "git_proxy": git_proxy_enabled,
         "gitlab_proxy": gitlab_proxy_enabled,
+        "privoxy_installed": privoxy_installed,
+        "privoxy_active": privoxy_active,
         "raw_status": status_out or "WARP Service Offline",
         "residential_proxy": {
             "configured": bool(res_cfg.get("host") and res_cfg.get("port")),
@@ -1686,9 +1727,11 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
           <div style="display: flex; align-items: center; gap: 8px;">
             <label style="font-size: 12px; font-weight: 600; color: var(--text);">Nguồn Proxy:</label>
             <select id="dockerBuildProxySource" class="select-style" style="width: auto; padding: 4px 8px; font-size: 12px;">
-              <option value="warp">⚡ Cloudflare WARP (127.0.0.1:40000)</option>
+              <option value="warp">⚡ Cloudflare WARP (HTTP Bridge :8118 / SOCKS5 :40000)</option>
               <option value="residential">🏡 Proxy Dân Cư (Residential)</option>
+              <option value="none">🟢 Đi trực tiếp (Không qua Proxy)</option>
             </select>
+            <span id="privoxyBadge" style="font-size: 11px; padding: 2px 8px; border-radius: 6px; background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3);">🟢 HTTP Bridge :8118 (pip/apt OK)</span>
           </div>
           <label style="font-size: 12px; display: flex; align-items: center; gap: 6px; cursor: pointer;">
             <input type="checkbox" id="chkInjectProxy" checked>
@@ -2111,6 +2154,21 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     document.getElementById('dockerSwitch').checked = data.docker_proxy;
     document.getElementById('gitSwitch').checked = data.git_proxy;
     document.getElementById('gitlabSwitch').checked = data.gitlab_proxy;
+
+    const privBadge = document.getElementById('privoxyBadge');
+    if (privBadge) {
+      if (data.privoxy_active) {
+        privBadge.innerHTML = '🟢 HTTP Bridge :8118 (pip/apt OK)';
+        privBadge.style.background = 'rgba(16, 185, 129, 0.15)';
+        privBadge.style.color = '#10b981';
+        privBadge.style.borderColor = 'rgba(16, 185, 129, 0.3)';
+      } else {
+        privBadge.innerHTML = `🟡 SOCKS5 :${data.port}`;
+        privBadge.style.background = 'rgba(245, 158, 11, 0.15)';
+        privBadge.style.color = '#f59e0b';
+        privBadge.style.borderColor = 'rgba(245, 158, 11, 0.3)';
+      }
+    }
 
     // Cập nhật Docker UI nếu có thông tin docker_info
     if (data.docker_info) {
@@ -3408,7 +3466,14 @@ Environment="NO_PROXY={no_proxy}"
             status = get_warp_status()
             port = status.get("port", 40000)
             proxy_source = req_data.get("proxy_source", "warp")
-            build_proxy_url = f"socks5://127.0.0.1:{port}"
+
+            # Tự động ưu tiên HTTP Proxy Bridge (Privoxy trên cổng 8118) để tương thích 100% với pip, apt, npm
+            privoxy_active = is_port_open("127.0.0.1", 8118)
+            if not privoxy_active and shutil.which("privoxy"):
+                ensure_privoxy(port)
+                privoxy_active = is_port_open("127.0.0.1", 8118)
+
+            build_proxy_url = "http://127.0.0.1:8118" if privoxy_active else f"socks5://127.0.0.1:{port}"
             build_no_proxy = "localhost,127.0.0.1,docker.io,*.docker.io,*.docker.com,production.cloudflare.docker.com,deb.debian.org,*.debian.org,archive.ubuntu.com,security.ubuntu.com,103.186.100.0/23,192.168.200.0/24"
 
             if proxy_source == "residential":
@@ -3418,6 +3483,8 @@ Environment="NO_PROXY={no_proxy}"
                     build_proxy_url = res_url
                     if res_cfg.get("no_proxy"):
                         build_no_proxy = res_cfg.get("no_proxy")
+            elif proxy_source == "none":
+                build_proxy_url = ""
 
             t0 = time.time()
             tmp_df_dir = None
@@ -3427,7 +3494,7 @@ Environment="NO_PROXY={no_proxy}"
                     cmd += ["--network", "host"]
                 if no_cache:
                     cmd += ["--no-cache"]
-                if inject_proxy:
+                if inject_proxy and build_proxy_url:
                     cmd += [
                         "--build-arg", f"HTTP_PROXY={build_proxy_url}",
                         "--build-arg", f"HTTPS_PROXY={build_proxy_url}",
@@ -3449,7 +3516,7 @@ Environment="NO_PROXY={no_proxy}"
                 else:
                     cmd += ["-t", tag, tmp_df_dir]
 
-                p = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=300)
+                p = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=900)
                 dur = round(time.time() - t0, 2)
                 output_text = p.stdout
 
@@ -3471,7 +3538,7 @@ Environment="NO_PROXY={no_proxy}"
                     "success": False,
                     "exit_code": -1,
                     "duration": dur,
-                    "output": "Lệnh docker build bị timeout sau 300 giây!"
+                    "output": "Lệnh docker build bị timeout sau 900 giây (15 phút)!"
                 }, code=408)
                 return
             except Exception as e:

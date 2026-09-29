@@ -270,15 +270,32 @@ show_status() {
     exit 0
 }
 
+# Cấu hình Privoxy làm HTTP Proxy Bridge (Port 8118) chuyển tiếp sang WARP SOCKS5
+# Giúp khắc phục triệt để lỗi "Missing dependencies for SOCKS support" trong pip/Python và lỗi APT
+configure_privoxy_bridge() {
+    echo -e "${BLUE}==>${NC} ${BOLD}Cài đặt & cấu hình Privoxy HTTP Proxy Bridge (Port 8118 ➜ ${PROXY_PORT})...${NC}"
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update -y -qq
+    apt-get install -y -qq privoxy
+    if [ -f /etc/privoxy/config ]; then
+        sed -i '/^forward-socks5/d' /etc/privoxy/config
+        echo "forward-socks5t / 127.0.0.1:${PROXY_PORT} ." >> /etc/privoxy/config
+        systemctl enable --now privoxy >/dev/null 2>&1
+        systemctl restart privoxy >/dev/null 2>&1
+        echo -e "  - Kích hoạt HTTP Proxy Bridge: ${GREEN}http://127.0.0.1:8118${NC} (Tương thích 100% pip, apt, npm)"
+    fi
+}
+
 # Hiển thị trợ giúp
 show_help() {
     echo "Sử dụng: sudo bash $0 [TÙY CHỌN]"
     echo ""
     echo "Tùy chọn:"
-    echo "  (không truyền tham số) : Cài đặt và cấu hình WARP Proxy tự động"
+    echo "  (không truyền tham số) : Cài đặt và cấu hình WARP Proxy + Privoxy HTTP Bridge tự động"
     echo "  --menu                 : Mở giao diện tương tác dòng lệnh (Terminal UI)"
     echo "  --dashboard            : Chạy Web Dashboard trên cổng 8888"
     echo "  --dashboard-service    : Cài đặt Web Dashboard làm systemd service (tự bật khi khởi động)"
+    echo "  --privoxy              : Cấu hình lại Privoxy HTTP Proxy Bridge (Port 8118)"
     echo "  --set-password <pass>  : Đổi mật khẩu đăng nhập Web Dashboard"
     echo "  --status               : Kiểm tra trạng thái kết nối WARP hiện tại"
     echo "  --uninstall            : Gỡ cài đặt Cloudflare WARP sạch sẽ"
@@ -317,6 +334,11 @@ main() {
             echo -e "${GREEN}Đã cập nhật mật khẩu Web Dashboard thành công!${NC}"
             exit 0
             ;;
+        --privoxy)
+            check_root
+            configure_privoxy_bridge
+            exit 0
+            ;;
         --uninstall)
             check_root
             uninstall_warp
@@ -336,6 +358,7 @@ main() {
             fix_firewall_and_apt
             install_warp_package
             configure_warp_proxy
+            configure_privoxy_bridge
             verify_connection
             ;;
         *)

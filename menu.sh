@@ -607,6 +607,30 @@ print('OK')
     done
 }
 
+get_warp_build_proxy() {
+    local port="$1"
+    local script_dir
+    script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+
+    if python3 -c "import socket; s=socket.socket(); s.settimeout(0.3); r=s.connect_ex(('127.0.0.1', 8118)); s.close(); exit(0 if r==0 else 1)" 2>/dev/null; then
+        echo "http://127.0.0.1:8118"
+    elif which privoxy >/dev/null 2>&1; then
+        python3 -c "
+import sys
+sys.path.insert(0, '${script_dir}')
+from web_dashboard import ensure_privoxy
+ensure_privoxy(${port})
+" 2>/dev/null
+        if python3 -c "import socket; s=socket.socket(); s.settimeout(0.3); r=s.connect_ex(('127.0.0.1', 8118)); s.close(); exit(0 if r==0 else 1)" 2>/dev/null; then
+            echo "http://127.0.0.1:8118"
+            return
+        fi
+        echo "socks5://127.0.0.1:${port}"
+    else
+        echo "socks5://127.0.0.1:${port}"
+    fi
+}
+
 docker_build_menu() {
     local script_dir
     script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -618,7 +642,11 @@ docker_build_menu() {
         echo -e "${CYAN}╔══════════════════════════════════════════════════════════════════════╗${NC}"
         echo -e "${CYAN}║${NC}   ${BOLD}${YELLOW}QUÉT THƯ MỤC DỰ ÁN & THỰC THI DOCKER BUILD QUA PROXY${NC}               ${CYAN}║${NC}"
         echo -e "${CYAN}╚══════════════════════════════════════════════════════════════════════╝${NC}"
-        echo -e "  Proxy khả dụng: WARP (127.0.0.1:${port}) hoặc Proxy Dân Cư"
+        if python3 -c "import socket; s=socket.socket(); s.settimeout(0.3); r=s.connect_ex(('127.0.0.1', 8118)); s.close(); exit(0 if r==0 else 1)" 2>/dev/null; then
+            echo -e "  Proxy: ${GREEN}HTTP Bridge (http://127.0.0.1:8118)${NC} | WARP SOCKS5 (:${port})"
+        else
+            echo -e "  Proxy: WARP SOCKS5 (127.0.0.1:${port}) hoặc Proxy Dân Cư"
+        fi
         echo -e "${CYAN}──────────────────────────────────────────────────────────────────────${NC}"
         echo -e "  ${BOLD}[1]${NC} 🔍 Quét thư mục tìm Dockerfile & Chọn build (Scan Projects)"
         echo -e "  ${BOLD}[2]${NC} ✍️  Nhập trực tiếp đường dẫn thư mục dự án để build"
@@ -690,7 +718,7 @@ for i, item in enumerate(data):
 
                 echo ""
                 echo -e "Chọn nguồn Proxy để build:"
-                echo -e "  [1] ⚡ Cloudflare WARP (127.0.0.1:${port})"
+                echo -e "  [1] ⚡ Cloudflare WARP (HTTP Bridge / SOCKS5)"
                 echo -e "  [2] 🏡 Proxy Dân Cư (Residential Proxy nếu đã cấu hình)"
                 echo -e "  [3] 🟢 Không dùng Proxy (Direct)"
                 read -rp "Chọn [1-3, mặc định 1]: " proxy_opt
@@ -698,7 +726,13 @@ for i, item in enumerate(data):
 
                 local build_proxy_url=""
                 if [ "$proxy_opt" -eq 1 ]; then
-                    build_proxy_url="socks5://127.0.0.1:${port}"
+                    build_proxy_url=$(get_warp_build_proxy "$port")
+                    if echo "$build_proxy_url" | grep -q "^http://"; then
+                        echo -e "${GREEN}✓ Đang sử dụng HTTP Proxy Bridge (${build_proxy_url})${NC}"
+                        echo -e "  ➜ Hỗ trợ nguyên bản pip, apt, npm (tránh lỗi Missing SOCKS dependencies)!"
+                    else
+                        echo -e "${YELLOW}! Đang sử dụng WARP SOCKS5 (${build_proxy_url})${NC}"
+                    fi
                 elif [ "$proxy_opt" -eq 2 ]; then
                     build_proxy_url=$(python3 -c "
 import sys
@@ -709,7 +743,7 @@ print(get_proxy_url(cfg, hide_password=False))
 " 2>/dev/null)
                     if [ -z "$build_proxy_url" ]; then
                         echo -e "${YELLOW}Chưa cấu hình Proxy Dân Cư, sử dụng WARP thay thế.${NC}"
-                        build_proxy_url="socks5://127.0.0.1:${port}"
+                        build_proxy_url=$(get_warp_build_proxy "$port")
                     fi
                 fi
 
@@ -762,14 +796,16 @@ print(get_proxy_url(cfg, hide_password=False))
                 read -rp "Nhập Tag Name Image [mặc định ${def_tag}]: " dir_tag
                 dir_tag=${dir_tag:-$def_tag}
 
-                echo -e "${BLUE}==>${NC} Đang build qua WARP Proxy: ${CYAN}docker build --network host -t $dir_tag $direct_dir${NC}"
+                local dir_proxy_url
+                dir_proxy_url=$(get_warp_build_proxy "$port")
+                echo -e "${BLUE}==>${NC} Đang build qua Proxy: ${CYAN}${dir_proxy_url}${NC}"
                 docker build --network host \
-                    --build-arg HTTP_PROXY="socks5://127.0.0.1:${port}" \
-                    --build-arg HTTPS_PROXY="socks5://127.0.0.1:${port}" \
-                    --build-arg ALL_PROXY="socks5://127.0.0.1:${port}" \
-                    --build-arg http_proxy="socks5://127.0.0.1:${port}" \
-                    --build-arg https_proxy="socks5://127.0.0.1:${port}" \
-                    --build-arg all_proxy="socks5://127.0.0.1:${port}" \
+                    --build-arg HTTP_PROXY="${dir_proxy_url}" \
+                    --build-arg HTTPS_PROXY="${dir_proxy_url}" \
+                    --build-arg ALL_PROXY="${dir_proxy_url}" \
+                    --build-arg http_proxy="${dir_proxy_url}" \
+                    --build-arg https_proxy="${dir_proxy_url}" \
+                    --build-arg all_proxy="${dir_proxy_url}" \
                     --build-arg NO_PROXY="localhost,127.0.0.1,docker.io,*.docker.com,deb.debian.org,archive.ubuntu.com" \
                     -t "$dir_tag" "$direct_dir"
                 local ret=$?
@@ -783,9 +819,12 @@ print(get_proxy_url(cfg, hide_password=False))
             3)
                 echo ""
                 echo -e "${BLUE}==>${NC} Chạy thử nghiệm build Alpine + cURL qua WARP Proxy..."
+                local alp_proxy
+                alp_proxy=$(get_warp_build_proxy "$port")
                 docker build --network host --no-cache \
-                    --build-arg HTTP_PROXY="socks5://127.0.0.1:${port}" \
-                    --build-arg ALL_PROXY="socks5://127.0.0.1:${port}" \
+                    --build-arg HTTP_PROXY="${alp_proxy}" \
+                    --build-arg HTTPS_PROXY="${alp_proxy}" \
+                    --build-arg ALL_PROXY="${alp_proxy}" \
                     -t "warp-alpine-test:latest" - <<'EOF'
 FROM alpine:latest
 RUN apk update && apk add --no-cache curl
@@ -797,9 +836,12 @@ EOF
             4)
                 echo ""
                 echo -e "${BLUE}==>${NC} Chạy thử nghiệm build Python + Pip qua WARP Proxy..."
+                local py_proxy
+                py_proxy=$(get_warp_build_proxy "$port")
                 docker build --network host --no-cache \
-                    --build-arg HTTP_PROXY="socks5://127.0.0.1:${port}" \
-                    --build-arg ALL_PROXY="socks5://127.0.0.1:${port}" \
+                    --build-arg HTTP_PROXY="${py_proxy}" \
+                    --build-arg HTTPS_PROXY="${py_proxy}" \
+                    --build-arg ALL_PROXY="${py_proxy}" \
                     -t "warp-python-test:latest" - <<'EOF'
 FROM python:3.11-alpine
 RUN pip install --no-cache-dir requests
