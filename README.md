@@ -92,9 +92,77 @@ sudo systemctl daemon-reload && sudo systemctl restart docker
 
 ---
 
+## 🖥️ Giao Diện Trực Quan Thay Vì Gõ Lệnh CLI
+
+Để người dùng không cần phải ghi nhớ các câu lệnh phức tạp, công cụ hỗ trợ **2 loại giao diện trực quan**:
+
+### 1. 🌐 Web Dashboard Hiện Đại (Trên trình duyệt)
+Giao diện Web siêu nhẹ (chạy bằng Python 3 có sẵn, không cần cài đặt thêm bất kỳ thư viện nào):
+* **Bật / Tắt WARP** với 1 cú click chuột.
+* **Bật / Tắt Proxy cho Docker** (tự động cấu hình `NO_PROXY` cho Docker Hub để không bị bóp băng thông).
+* **Bật / Tắt Proxy cho GitHub CLI** (`github.com`).
+* **Đổi cổng SOCKS5 Proxy** trực quan.
+* **Đo tốc độ mạng trực tiếp (Speed Test)** kết nối Hetzner châu Âu.
+* **Xem nhật ký dịch vụ (Real-time Logs)**.
+
+```bash
+# Khởi chạy Web Dashboard trực tiếp:
+sudo python3 web_dashboard.py
+# Hoặc chạy qua script:
+sudo bash install.sh --dashboard
+
+# Hoặc cài đặt thành dịch vụ hệ thống (tự chạy khi boot):
+sudo bash install.sh --dashboard-service
+```
+*Truy cập trình duyệt tại:* **`http://<IP_MAY_CHU>:8888`**
+
+---
+
+### 2. 📟 Terminal Interactive Menu (TUI trong SSH)
+Nếu không muốn mở cổng web ra ngoài, bạn có thể quản lý trực tiếp bằng menu số trong SSH:
+
+```bash
+# Mở menu điều khiển:
+sudo bash menu.sh
+# Hoặc:
+sudo bash install.sh --menu
+```
+
+*Giao diện Menu trực quan:*
+```text
+╔══════════════════════════════════════════════════════════════════════╗
+║   CLOUDFLARE WARP CONTROL CENTER - BẢNG ĐIỀU KHIỂN TERMINAL (TUI)     ║
+╚══════════════════════════════════════════════════════════════════════╝
+  Trạng thái  : ● ĐANG KẾT NỐI (Connected)
+  Chế độ      : SOCKS5 Proxy (An toàn tuyệt đối cho SSH)
+  Cổng Proxy  : 127.0.0.1:40000
+  Tích hợp    : Docker [Bật (kèm NO_PROXY)] | Git [Bật (github.com)]
+──────────────────────────────────────────────────────────────────────
+  [1] Bật kết nối WARP (Connect)
+  [2] Tạm ngắt kết nối WARP (Disconnect)
+  [3] Đổi cổng SOCKS5 Proxy (Change Port)
+  [4] Bật / Tắt Proxy cho Docker Daemon (kèm NO_PROXY)
+  [5] Bật / Tắt Proxy cho GitHub CLI
+  [6] ⚡ Đo kiểm tốc độ mạng quốc tế (Speed Test)
+  [7] 🌐 Mở Web Dashboard trên trình duyệt (Port 8888)
+  [8] 📋 Xem log dịch vụ (warp-svc logs)
+  [0] Thoát
+```
+
+---
+
 ## 📌 Các lệnh quản lý tiện ích
 
 ```bash
+# Mở menu Terminal
+sudo bash install.sh --menu
+
+# Chạy Web Dashboard
+sudo bash install.sh --dashboard
+
+# Cài đặt Web Dashboard chạy nền cùng hệ thống
+sudo bash install.sh --dashboard-service
+
 # Kiểm tra trạng thái kết nối
 sudo bash install.sh --status
 

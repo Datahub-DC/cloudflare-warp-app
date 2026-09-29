@@ -1,0 +1,17 @@
+[Unit]
+Description=Cloudflare WARP Web Dashboard & Control Center
+After=network.target warp-svc.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/linux-cloudflare-warp
+ExecStart=/usr/bin/python3 /root/linux-cloudflare-warp/web_dashboard.py
+Restart=always
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
+Environment=WARP_DASHBOARD_PORT=8888
+Environment=WARP_DASHBOARD_HOST=0.0.0.0
+
+[Install]
+WantedBy=multi-user.target

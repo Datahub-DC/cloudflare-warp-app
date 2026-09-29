@@ -203,7 +203,11 @@ verify_connection() {
         echo -e "     ${CYAN}export all_proxy=\"socks5://127.0.0.1:${PROXY_PORT}\"${NC}"
         echo -e "     ${CYAN}export ALL_PROXY=\"socks5://127.0.0.1:${PROXY_PORT}\"${NC}"
         echo ""
-        echo -e "  4. ${BOLD}Xem hướng dẫn chi tiết về cấu hình Docker NO_PROXY & Privoxy:${NC}"
+        echo -e "  4. ${BOLD}Mở Bảng Điều Khiển Giao Diện Trực Quan (UI):${NC}"
+        echo -e "     - ${GREEN}Terminal Interactive UI (TUI):${NC} ${CYAN}sudo bash menu.sh${NC}"
+        echo -e "     - ${GREEN}Web Dashboard (Trình duyệt):${NC}    ${CYAN}sudo python3 web_dashboard.py${NC} (hoặc chạy ${CYAN}sudo bash install.sh --dashboard-service${NC})"
+        echo ""
+        echo -e "  5. ${BOLD}Xem tài liệu chi tiết (Docker NO_PROXY, Privoxy):${NC}"
         echo -e "     Đọc tài liệu: ${CYAN}CF_Warp_guideline.md${NC}"
         echo ""
     else
@@ -216,9 +220,28 @@ verify_connection() {
     fi
 }
 
+# Cài đặt Web Dashboard làm systemd service
+setup_dashboard_service() {
+    local script_dir
+    script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+    echo -e "${BLUE}==>${NC} ${BOLD}Cài đặt Web Dashboard thành dịch vụ hệ thống (systemd)...${NC}"
+    cp "${script_dir}/warp-dashboard.service" /etc/systemd/system/warp-dashboard.service
+    systemctl daemon-reload
+    systemctl enable --now warp-dashboard.service
+    echo -e "${GREEN}Dịch vụ warp-dashboard đã được kích hoạt và tự động khởi động cùng hệ thống!${NC}"
+    local ip_public
+    ip_public=$(curl -m 3 -s ifconfig.me || hostname -I | awk '{print $1}')
+    echo -e "  Truy cập giao diện tại: ${CYAN}http://${ip_public}:8888${NC}"
+    exit 0
+}
+
 # Gỡ cài đặt hoàn toàn
 uninstall_warp() {
     echo -e "${YELLOW}==>${NC} ${BOLD}Đang tiến hành gỡ bỏ Cloudflare WARP...${NC}"
+    systemctl stop warp-dashboard >/dev/null 2>&1 || true
+    systemctl disable warp-dashboard >/dev/null 2>&1 || true
+    rm -f /etc/systemd/system/warp-dashboard.service
+
     run_warp_cli disconnect || true
     systemctl stop warp-svc >/dev/null 2>&1 || true
     systemctl disable warp-svc >/dev/null 2>&1 || true
@@ -249,6 +272,9 @@ show_help() {
     echo ""
     echo "Tùy chọn:"
     echo "  (không truyền tham số) : Cài đặt và cấu hình WARP Proxy tự động"
+    echo "  --menu                 : Mở giao diện tương tác dòng lệnh (Terminal UI)"
+    echo "  --dashboard            : Chạy Web Dashboard trên cổng 8888"
+    echo "  --dashboard-service    : Cài đặt Web Dashboard làm systemd service (tự bật khi khởi động)"
     echo "  --status               : Kiểm tra trạng thái kết nối WARP hiện tại"
     echo "  --uninstall            : Gỡ cài đặt Cloudflare WARP sạch sẽ"
     echo "  --help, -h             : Hiển thị hướng dẫn này"
@@ -257,7 +283,22 @@ show_help() {
 
 # Điểm vào chính của script
 main() {
+    local script_dir
+    script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+
     case "$1" in
+        --menu)
+            check_root
+            bash "${script_dir}/menu.sh"
+            ;;
+        --dashboard)
+            check_root
+            python3 "${script_dir}/web_dashboard.py"
+            ;;
+        --dashboard-service)
+            check_root
+            setup_dashboard_service
+            ;;
         --uninstall)
             check_root
             uninstall_warp
